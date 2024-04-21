@@ -7,11 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.*;
 
 /**
  * @author LiangTao
@@ -71,12 +67,9 @@ public class UserMessage implements ChatMessage {
             return (String) content;
         }
         if (content instanceof Collection) {
-            Collection collection = (Collection) content;
-            Optional<String> text = collection.stream().filter(item -> item instanceof ImageContent)
-                    .filter(imageContent -> ((ImageContent) imageContent).getType().equals("text"))
-                    .findFirst().map(imageContent -> ((ImageContent) imageContent).getText());
-            if (text.isPresent()) {
-                return text.get();
+            Collection<ImageContent> collection = (Collection<ImageContent>) content;
+            for (ImageContent item : collection) {
+                if (item.getType().equals("text")) return item.getText();
             }
         }
         return null;
@@ -88,12 +81,16 @@ public class UserMessage implements ChatMessage {
      * @param text      query text
      * @param imageUrls image urls
      * @return com.theokanning.openai.completion.chat.UserMessage
-     * @author liangtao
+     * @author liangtao, Ran
      * @date 2024/4/12
      **/
+    @JsonIgnore
     public static UserMessage buildImageMessage(String text, String... imageUrls) {
-        List<ImageContent> imageContents = Arrays.stream(imageUrls).map(url -> new ImageContent(new ImageUrl(url))).collect(Collectors.toList());
-        imageContents.add(0, new ImageContent(text));
+        List<ImageContent> imageContents = new ArrayList<>(imageUrls.length + 1);
+        imageContents.add(new ImageContent(text));
+        for (String url : imageUrls) {
+            imageContents.add(new ImageContent(new ImageUrl(url)));
+        }
         return new UserMessage(imageContents);
     }
 }
