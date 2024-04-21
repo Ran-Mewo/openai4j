@@ -184,6 +184,9 @@ public interface OpenAiApi {
 
     //----
 
+    @Headers({"OpenAI-Beta: assistants=v1"})
+    @POST("/assistants/{assistant_id}/files")
+    Single<AssistantFile> createAssistantFile(@Path("assistant_id") String assistantId, @Body AssistantFileRequest fileRequest);
 
     @Headers({"OpenAI-Beta: assistants=v1"})
     @GET("/assistants/{assistant_id}/files/{file_id}")

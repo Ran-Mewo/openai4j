@@ -1,0 +1,44 @@
+plugins {
+    id 'java' apply true
+    id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
+    id "com.vanniktech.maven.publish" version "0.19.0" apply false
+}
+
+allprojects {
+    apply plugin: 'java'
+    apply plugin: 'com.github.johnrengelman.shadow'
+
+    plugins.withId("com.vanniktech.maven.publish") {
+        mavenPublish {
+            sonatypeHost = "S01"
+        }
+    }
+
+    configurations {
+        runtimeClasspath {
+            exclude group: 'com.squareup.okhttp3', module: 'okhttp'
+            exclude group: 'com.squareup.okio', module: 'okio'
+        }
+    }
+
+    shadowJar {
+        configurations = [project.configurations.runtimeClasspath]
+        archiveBaseName.set('openai4j+' + project.name)
+        archiveVersion.set(VERSION_NAME)
+        archiveClassifier.set('fat')
+        mergeServiceFiles()
+        manifest {
+            attributes 'Encoding': 'UTF-8'
+        }
+    }
+
+    compileJava.options.encoding = 'UTF-8'
+}
+
+task fatJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    configurations = [project.configurations.runtimeClasspath]
+    from subprojects.collect { it.shadowJar.outputs.files }
+    archiveBaseName.set('openai4j')
+    archiveVersion.set(VERSION_NAME)
+    archiveClassifier.set('fat')
+}

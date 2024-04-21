@@ -1,0 +1,12 @@
+rootProject.name = 'openai4j'
+
+include 'api'
+include 'client'
+include 'example'
+include 'service'
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}
