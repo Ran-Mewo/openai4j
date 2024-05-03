@@ -1,6 +1,5 @@
 package com.theokanning.openai.completion.chat;
 
-import com.fasterxml.jackson.annotation.JsonValue;
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
@@ -10,8 +9,6 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -21,62 +18,69 @@ import java.io.IOException;
  * see {@link ChatCompletionRequest} documentation.
  */
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class ChatResponseFormat {
-    private ResponseFormat type;
+    /**
+     * auto/text/json_object
+     */
+    private String type;
 
-    public enum ResponseFormat {
-        TEXT("text"),
-        JSON("json_object");
-
-        @JsonValue
-        private final String value;
-
-        ResponseFormat(final String value) {
-            this.value = value;
-        }
-
-        @JsonValue
-        public String value() {
-            return value;
-        }
+    /**
+     * 构造私有,只允许从静态变量获取
+     */
+    private ChatResponseFormat(String type) {
+        this.type = type;
     }
+
+    public static final ChatResponseFormat AUTO = new ChatResponseFormat("auto");
+
+    public static final ChatResponseFormat TEXT = new ChatResponseFormat("text");
+
+    public static final ChatResponseFormat JSON_OBJECT = new ChatResponseFormat("json_object");
 
 
     @NoArgsConstructor
-    public static class ChatResponseFormatSerializer extends JsonSerializer<Object> {
+    public static class ChatResponseFormatSerializer extends JsonSerializer<ChatResponseFormat> {
         @Override
-        public void serialize(Object o, JsonGenerator jsonGenerator, SerializerProvider serializerProvider) throws IOException {
-            if (o instanceof String) {
-                jsonGenerator.writeString((String) o);
-            }
-            if (o instanceof ChatResponseFormat) {
-                jsonGenerator.writeStartObject();
-                jsonGenerator.writeObjectField("type", ((ChatResponseFormat) o).getType());
-                jsonGenerator.writeEndObject();
+        public void serialize(ChatResponseFormat value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+            if (value.getType().equals("auto")) {
+                gen.writeString(value.getType());
+            } else {
+                gen.writeStartObject();
+                gen.writeObjectField("type", (value).getType());
+                gen.writeEndObject();
             }
         }
+
     }
 
     @NoArgsConstructor
-    public static class ChatResponseFormatDeserializer extends JsonDeserializer<Object> {
+    public static class ChatResponseFormatDeserializer extends JsonDeserializer<ChatResponseFormat> {
         @Override
-        public Object deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException, JacksonException {
+        public ChatResponseFormat deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException, JacksonException {
             if (jsonParser.getCurrentToken() == JsonToken.VALUE_STRING) {
-                return jsonParser.getText();
+                String text = jsonParser.getText();
+                if (!"auto".equals(text)) {
+                    throw new InvalidFormatException(jsonParser, "Invalid response format", jsonParser.getCurrentToken().toString(), ChatResponseFormat.class);
+                }
+                return new ChatResponseFormat(text);
             }
             // 处理对象的情况 return ChatResponseFormat
             if (jsonParser.getCurrentToken() == JsonToken.START_OBJECT) {
-                ChatResponseFormat chatResponseFormat = new ChatResponseFormat();
                 while (jsonParser.nextToken() != JsonToken.END_OBJECT) {
                     if (jsonParser.getCurrentName().equals("type")) {
                         jsonParser.nextToken();
-                        chatResponseFormat.setType(ResponseFormat.valueOf(jsonParser.getText().toUpperCase()));
+                        switch (jsonParser.getText()){
+                            case "auto":
+                                return AUTO;
+                            case "text":
+                                return TEXT;
+                            case "json_object":
+                                return JSON_OBJECT;
+                            default:
+                                throw new InvalidFormatException(jsonParser, "Invalid response format", jsonParser.getCurrentToken().toString(), ChatResponseFormat.class);
+                        }
                     }
                 }
-                return chatResponseFormat;
             }
             throw new InvalidFormatException(jsonParser, "Invalid response format", jsonParser.getCurrentToken().toString(), ChatResponseFormat.class);
         }

@@ -1,13 +1,13 @@
 package com.theokanning.openai.service;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.theokanning.openai.assistants.run.ToolChoice;
 import com.theokanning.openai.completion.chat.*;
+import com.theokanning.openai.service.util.ToolUtil;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -15,40 +15,8 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChatCompletionTest {
-    static class City {
-        @JsonPropertyDescription("The time to get the cities")
-        public String time;
-    }
 
-    static class Weather {
-        @JsonPropertyDescription("City and state, for example: León, Guanajuato")
-        public String location;
-
-        @JsonPropertyDescription("The temperature unit, can be 'celsius' or 'fahrenheit'")
-        @JsonProperty(required = true)
-        public WeatherUnit unit;
-    }
-
-    enum WeatherUnit {
-        CELSIUS, FAHRENHEIT;
-    }
-
-    static class WeatherResponse {
-        public String location;
-        public WeatherUnit unit;
-        public int temperature;
-        public String description;
-
-        public WeatherResponse(String location, WeatherUnit unit, int temperature, String description) {
-            this.location = location;
-            this.unit = unit;
-            this.temperature = temperature;
-            this.description = description;
-        }
-    }
-
-    String token = System.getenv("OPENAI_TOKEN");
-    OpenAiService service = new OpenAiService(token);
+    OpenAiService service = new OpenAiService();
 
     @Test
     void createChatCompletion() {
@@ -99,9 +67,9 @@ class ChatCompletionTest {
 
         ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-1106")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
-                .responseFormat(ChatResponseFormat.builder().type(ChatResponseFormat.ResponseFormat.JSON).build())
+                .responseFormat(ChatResponseFormat.JSON_OBJECT)
                 .maxTokens(50)
                 .logitBias(new HashMap<>())
                 .build();
@@ -122,11 +90,7 @@ class ChatCompletionTest {
 
     @Test
     void createChatCompletionWithFunctions() {
-        final List<ChatFunction> functions = Collections.singletonList(ChatFunction.builder()
-                .name("get_weather")
-                .description("Get the current weather in a given location")
-                .executor(Weather.class, w -> new WeatherResponse(w.location, w.unit, 25, "sunny"))
-                .build());
+        final List<ChatFunction> functions = Collections.singletonList(ToolUtil.weatherFunction());
         final FunctionExecutor functionExecutor = new FunctionExecutor(functions);
 
         final List<ChatMessage> messages = new ArrayList<>();
@@ -155,8 +119,8 @@ class ChatCompletionTest {
         assertNotEquals("error", callResponse.getName());
 
         // this performs an unchecked cast
-        WeatherResponse functionExecutionResponse = functionExecutor.execute(choice.getMessage().getFunctionCall());
-        assertInstanceOf(WeatherResponse.class, functionExecutionResponse);
+        ToolUtil.WeatherResponse functionExecutionResponse = functionExecutor.execute(choice.getMessage().getFunctionCall());
+        assertInstanceOf(ToolUtil.WeatherResponse.class, functionExecutionResponse);
         assertEquals(25, functionExecutionResponse.temperature);
 
         JsonNode jsonFunctionExecutionResponse = functionExecutor.executeAndConvertToJson(choice.getMessage().getFunctionCall());
@@ -229,11 +193,7 @@ class ChatCompletionTest {
 
     @Test
     void streamChatCompletionWithFunctions() {
-        final List<ChatFunction> functions = Collections.singletonList(ChatFunction.builder()
-                .name("get_weather")
-                .description("Get the current weather in a given location")
-                .executor(Weather.class, w -> new WeatherResponse(w.location, w.unit, 25, "sunny"))
-                .build());
+        final List<ChatFunction> functions = Collections.singletonList(ToolUtil.weatherFunction());
         final FunctionExecutor functionExecutor = new FunctionExecutor(functions);
 
         final List<ChatMessage> messages = new ArrayList<>();
@@ -263,8 +223,8 @@ class ChatCompletionTest {
         assertNotEquals("error", callResponse.getName());
 
         // this performs an unchecked cast
-        WeatherResponse functionExecutionResponse = functionExecutor.execute(accumulatedMessage.getFunctionCall());
-        assertInstanceOf(WeatherResponse.class, functionExecutionResponse);
+        ToolUtil.WeatherResponse functionExecutionResponse = functionExecutor.execute(accumulatedMessage.getFunctionCall());
+        assertInstanceOf(ToolUtil.WeatherResponse.class, functionExecutionResponse);
         assertEquals(25, functionExecutionResponse.temperature);
 
         JsonNode jsonFunctionExecutionResponse = functionExecutor.executeAndConvertToJson(accumulatedMessage.getFunctionCall());
@@ -319,7 +279,7 @@ class ChatCompletionTest {
 
         ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-0613")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
                 .functions(Collections.singletonList(function))
                 .n(1)
@@ -339,16 +299,9 @@ class ChatCompletionTest {
 
     @Test
     void createChatCompletionWithToolFunctions() {
-        //首先声明一个function,获取天气
-        ChatFunction function = ChatFunction.builder()
-                .name("get_weather")
-                .description("Get the current weather in a given location")
-                //这里的executor是一个lambda表达式,这个lambda表达式接受一个Weather对象,返回一个WeatherResponse对象
-                .executor(Weather.class, w -> new WeatherResponse(w.location, w.unit, 25, "sunny"))
-                .build();
 
         //声明一个工具,目前openai-tool只支持function类型的tool
-        final ChatTool tool = new ChatTool(function);
+        final ChatTool tool = new ChatTool(ToolUtil.weatherFunction());
         final List<ChatMessage> messages = new ArrayList<>();
         final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
         final ChatMessage userMessage = new UserMessage("What is the weather in Monterrey, Nuevo León?");
@@ -357,11 +310,11 @@ class ChatCompletionTest {
 
         ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-0613")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
                 //这里的tools是一个list,可以传入多个tool
                 .tools(Arrays.asList(tool))
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(100)
                 .build();
@@ -373,10 +326,10 @@ class ChatCompletionTest {
 
         ChatToolCall toolCall = choice.getMessage().getToolCalls().get(0);
 
-        FunctionExecutor toolExecutor = new FunctionExecutor(Arrays.asList(function));
+        FunctionExecutor toolExecutor = new FunctionExecutor(Arrays.asList(ToolUtil.weatherFunction()));
         Object functionExecutionResponse = toolExecutor.execute(toolCall.getFunction());
-        assertInstanceOf(WeatherResponse.class, functionExecutionResponse);
-        assertEquals(25, ((WeatherResponse) functionExecutionResponse).temperature);
+        assertInstanceOf(ToolUtil.WeatherResponse.class, functionExecutionResponse);
+        assertEquals(25, ((ToolUtil.WeatherResponse) functionExecutionResponse).temperature);
 
         JsonNode jsonFunctionExecutionResponse = toolExecutor.executeAndConvertToJson(toolCall.getFunction());
         assertInstanceOf(ObjectNode.class, jsonFunctionExecutionResponse);
@@ -391,10 +344,10 @@ class ChatCompletionTest {
 
         ChatCompletionRequest chatCompletionRequest2 = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-0613")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
                 .tools(Arrays.asList(tool))
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(100)
                 .logitBias(new HashMap<>())
@@ -411,19 +364,19 @@ class ChatCompletionTest {
         final List<ChatFunction> functions = Arrays.asList(ChatFunction.builder()
                         .name("get_weather")
                         .description("Get the current weather in a given location")
-                        .executor(Weather.class, w -> {
+                        .executor(ToolUtil.Weather.class, w -> {
                             switch (w.location) {
                                 case "tokyo":
-                                    return new WeatherResponse(w.location, w.unit, 10, "cloudy");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 10, "cloudy");
                                 case "san francisco":
-                                    return new WeatherResponse(w.location, w.unit, 72, "sunny");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 72, "sunny");
                                 case "paris":
-                                    return new WeatherResponse(w.location, w.unit, 22, "sunny");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 22, "sunny");
                                 default:
-                                    return new WeatherResponse(w.location, w.unit, 0, "unknown");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 0, "unknown");
                             }
                         }).build(),
-                ChatFunction.builder().name("getCities").description("Get a list of cities by time").executor(City.class, v -> {
+                ChatFunction.builder().name("getCities").description("Get a list of cities by time").executor(ToolUtil.City.class, v -> {
                     assertEquals("2022-12-01", v.time);
                     return Arrays.asList("tokyo", "paris");
                 }).build()
@@ -431,8 +384,8 @@ class ChatCompletionTest {
         final FunctionExecutor toolExecutor = new FunctionExecutor(functions);
 
         List<ChatTool> tools = new ArrayList<>();
-        tools.add(new ChatTool<>(functions.get(0)));
-        tools.add(new ChatTool<>(functions.get(1)));
+        tools.add(new ChatTool(functions.get(0)));
+        tools.add(new ChatTool(functions.get(1)));
 
         final List<ChatMessage> messages = new ArrayList<>();
         final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
@@ -442,10 +395,10 @@ class ChatCompletionTest {
 
         ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-0613")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
                 .tools(tools)
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(100)
                 .logitBias(new HashMap<>())
@@ -479,7 +432,7 @@ class ChatCompletionTest {
                 .model("gpt-3.5-turbo-0125")
                 .messages(messages)
                 .tools(tools)
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(100)
                 .logitBias(new HashMap<>())
@@ -498,16 +451,16 @@ class ChatCompletionTest {
 
         for (ChatToolCall weatherToolCall : choice2.getMessage().getToolCalls()) {
             Object itemResult = toolExecutor.execute(weatherToolCall.getFunction());
-            assertInstanceOf(WeatherResponse.class, itemResult);
+            assertInstanceOf(ToolUtil.WeatherResponse.class, itemResult);
             messages.add(toolExecutor.executeAndConvertToMessage(weatherToolCall.getFunction(), weatherToolCall.getId()));
         }
 
         ChatCompletionRequest chatCompletionRequest3 = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-0613")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
                 .tools(tools)
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(100)
                 .logitBias(new HashMap<>())
@@ -556,26 +509,26 @@ class ChatCompletionTest {
                 ChatFunction.builder()
                         .name("get_weather")
                         .description("Get the current weather in a given location")
-                        .executor(Weather.class, w -> {
+                        .executor(ToolUtil.Weather.class, w -> {
                             switch (w.location) {
                                 case "tokyo":
-                                    return new WeatherResponse(w.location, w.unit, 10, "cloudy");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 10, "cloudy");
                                 case "san francisco":
-                                    return new WeatherResponse(w.location, w.unit, 72, "sunny");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 72, "sunny");
                                 case "paris":
-                                    return new WeatherResponse(w.location, w.unit, 22, "sunny");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 22, "sunny");
                                 default:
-                                    return new WeatherResponse(w.location, w.unit, 0, "unknown");
+                                    return new ToolUtil.WeatherResponse(w.location, w.unit, 0, "unknown");
                             }
                         }).build(),
                 //2. 城市查询
-                ChatFunction.builder().name("getCities").description("Get a list of cities by time").executor(City.class, v -> Arrays.asList("tokyo", "paris")).build()
+                ChatFunction.builder().name("getCities").description("Get a list of cities by time").executor(ToolUtil.City.class, v -> Arrays.asList("tokyo", "paris")).build()
         );
         final FunctionExecutor toolExecutor = new FunctionExecutor(functions);
 
         List<ChatTool> tools = new ArrayList<>();
-        tools.add(new ChatTool<>(functions.get(0)));
-        tools.add(new ChatTool<>(functions.get(1)));
+        tools.add(new ChatTool(functions.get(0)));
+        tools.add(new ChatTool(functions.get(1)));
 
         final List<ChatMessage> messages = new ArrayList<>();
         final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
@@ -585,10 +538,10 @@ class ChatCompletionTest {
 
         ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-0613")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
                 .tools(tools)
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(200)
                 .build();
@@ -608,7 +561,6 @@ class ChatCompletionTest {
         Object execute = toolExecutor.execute(toolCall.getFunction());
         assertInstanceOf(List.class, execute);
 
-
         JsonNode jsonNode = toolExecutor.executeAndConvertToJson(toolCall.getFunction());
         assertInstanceOf(ArrayNode.class, jsonNode);
 
@@ -625,7 +577,7 @@ class ChatCompletionTest {
                 .model("gpt-3.5-turbo-0125")
                 .messages(messages)
                 .tools(tools)
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(100)
                 .logitBias(new HashMap<>())
@@ -645,16 +597,16 @@ class ChatCompletionTest {
 
         for (ChatToolCall weatherToolCall : accumulatedMessage2.getToolCalls()) {
             Object itemResult = toolExecutor.execute(weatherToolCall.getFunction());
-            assertInstanceOf(WeatherResponse.class, itemResult);
+            assertInstanceOf(ToolUtil.WeatherResponse.class, itemResult);
             messages.add(toolExecutor.executeAndConvertToMessage(weatherToolCall.getFunction(), weatherToolCall.getId()));
         }
 
         ChatCompletionRequest chatCompletionRequest3 = ChatCompletionRequest
                 .builder()
-                .model("gpt-3.5-turbo-0613")
+                .model("gpt-3.5-turbo")
                 .messages(messages)
                 .tools(tools)
-                .toolChoice("auto")
+                .toolChoice(ToolChoice.AUTO)
                 .n(1)
                 .maxTokens(100)
                 .logitBias(new HashMap<>())

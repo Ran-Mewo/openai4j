@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.theokanning.openai.assistants.run.ToolCallFunction;
 import com.theokanning.openai.completion.chat.ChatFunction;
 import com.theokanning.openai.completion.chat.ChatFunctionCall;
 import com.theokanning.openai.completion.chat.FunctionMessage;
@@ -97,9 +98,27 @@ public class FunctionExecutor {
         return new ToolMessage(executeAndConvertToJson(call).toPrettyString(), toolId);
     }
 
+    /**
+     * 将assistant-v2 api中的需要执行的function执行并返回json
+     *
+     * @param call
+     * @return
+     */
+    public JsonNode executeAndConvertToJson(ToolCallFunction call) {
+        return executeAndConvertToJson(call.getName(), call.getArguments());
+    }
+
     public JsonNode executeAndConvertToJson(ChatFunctionCall call) {
+        return executeAndConvertToJson(call.getName(), call.getArguments());
+    }
+
+    public <T> T execute(ChatFunctionCall functionCall) {
+        return execute(functionCall.getName(), functionCall.getArguments());
+    }
+
+    public JsonNode executeAndConvertToJson(String funName, JsonNode arguments) {
         try {
-            Object execution = execute(call);
+            Object execution = execute(funName, arguments);
             if (execution instanceof TextNode) {
                 JsonNode objectNode = MAPPER.readTree(((TextNode) execution).asText());
                 if (objectNode.isMissingNode())
@@ -119,14 +138,15 @@ public class FunctionExecutor {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+
     }
 
+
     @SuppressWarnings("unchecked")
-    public <T> T execute(ChatFunctionCall call) {
-        ChatFunction function = FUNCTIONS.get(call.getName());
+    public <T> T execute(String funName, JsonNode arguments) {
+        ChatFunction function = FUNCTIONS.get(funName);
         Object obj;
         try {
-            JsonNode arguments = call.getArguments();
             obj = MAPPER.readValue(arguments instanceof TextNode ? arguments.asText() : arguments.toPrettyString(), function.getParametersClass());
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);

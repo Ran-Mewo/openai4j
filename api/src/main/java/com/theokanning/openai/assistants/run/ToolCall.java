@@ -20,16 +20,25 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ToolCall {
+    //may be need     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    Integer index;
 
-    private String id;
+    String id;
 
-    private String type;
+    /**
+     * An array of tool calls the run step was involved in.
+     * These can be associated with one of three types of tools: code_interpreter, file_search, or function.
+     */
+    String type;
 
     @JsonProperty("code_interpreter")
-    private ToolCallCodeInterpreter codeInterpreter;
+    ToolCallCodeInterpreter codeInterpreter;
 
+    /**
+     * For now, this is always going to be an empty object.
+     */
     @JsonProperty("file_search")
-    private Map<String, String> fileSearch;
+    Map<String, String> fileSearch;
 
-    private ToolCallFunction function;
+    ToolCallFunction function;
 }

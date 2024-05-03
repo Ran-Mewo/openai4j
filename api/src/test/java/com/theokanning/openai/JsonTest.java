@@ -5,10 +5,29 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.theokanning.openai.assistants.assistant.Assistant;
 import com.theokanning.openai.assistants.assistant.AssistantRequest;
 import com.theokanning.openai.assistants.assistant.ModifyAssistantRequest;
+import com.theokanning.openai.assistants.assistant.VectorStoreFileRequest;
+import com.theokanning.openai.assistants.message.Message;
+import com.theokanning.openai.assistants.message.MessageRequest;
+import com.theokanning.openai.assistants.message.ModifyMessageRequest;
+import com.theokanning.openai.assistants.message.content.MessageDelta;
+import com.theokanning.openai.assistants.run.CreateThreadAndRunRequest;
+import com.theokanning.openai.assistants.run.Run;
+import com.theokanning.openai.assistants.run.RunCreateRequest;
+import com.theokanning.openai.assistants.run.SubmitToolOutputsRequest;
+import com.theokanning.openai.assistants.run_step.RunStep;
+import com.theokanning.openai.assistants.run_step.RunStepDelta;
 import com.theokanning.openai.assistants.thread.Thread;
 import com.theokanning.openai.assistants.thread.ThreadRequest;
+import com.theokanning.openai.assistants.vector_store.ModifyVectorStoreRequest;
+import com.theokanning.openai.assistants.vector_store.VectorStore;
+import com.theokanning.openai.assistants.vector_store.VectorStoreRequest;
+import com.theokanning.openai.assistants.vector_store_file.VectorStoreFile;
+import com.theokanning.openai.assistants.vector_store_file_batch.VectorStoreFilesBatch;
+import com.theokanning.openai.assistants.vector_store_file_batch.VectorStoreFilesBatchRequest;
 import com.theokanning.openai.audio.TranscriptionResult;
 import com.theokanning.openai.audio.TranslationResult;
+import com.theokanning.openai.batch.Batch;
+import com.theokanning.openai.batch.BatchRequest;
 import com.theokanning.openai.completion.chat.ChatCompletionRequest;
 import com.theokanning.openai.completion.chat.ChatCompletionResult;
 import com.theokanning.openai.edit.EditRequest;
@@ -52,7 +71,9 @@ public class JsonTest {
             TranslationResult.class,
             Model.class,
             ModerationRequest.class,
-            ModerationResult.class
+            ModerationResult.class,
+            BatchRequest.class,
+            Batch.class
     })
     void objectMatchesJson(Class<?> clazz) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
@@ -78,7 +99,24 @@ public class JsonTest {
             Assistant.class,
             ModifyAssistantRequest.class,
             ThreadRequest.class,
-            Thread.class
+            Thread.class,
+            MessageRequest.class,
+            Message.class,
+            ModifyMessageRequest.class,
+            RunCreateRequest.class,
+            Run.class,
+            CreateThreadAndRunRequest.class,
+            SubmitToolOutputsRequest.class,
+            RunStep.class,
+            VectorStoreRequest.class,
+            VectorStore.class,
+            ModifyVectorStoreRequest.class,
+            VectorStoreFileRequest.class,
+            VectorStoreFile.class,
+            VectorStoreFilesBatchRequest.class,
+            VectorStoreFilesBatch.class,
+            MessageDelta.class,
+            RunStepDelta.class
     })
     void assistantObjectMatchesJson(Class<?> clazz) throws IOException {
         ObjectMapper mapper = new ObjectMapper();

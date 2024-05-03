@@ -1,10 +1,15 @@
 ![Maven Central](https://img.shields.io/maven-central/v/io.github.lambdua/service?color=blue)
 
+# OpenAi4J
+
+中文文档不是最新的,目前没有时间精力去维护,如果你有兴趣,可以提交PR,我会尽快合并,建议查看[英文文档](README.md)!</br>
+中文文档不是最新的,目前没有时间精力去维护,如果你有兴趣,可以提交PR,我会尽快合并,建议查看[英文文档](README.md)!</br>
+中文文档不是最新的,目前没有时间精力去维护,如果你有兴趣,可以提交PR,我会尽快合并,建议查看[英文文档](README.md)!</br>
+
 > ⚠️ 这个项目是[openai Java](https://github.com/TheoKanning/openai-java)
 > 项目的分叉,原项目作者似乎已经停止维护,无法满足我的需求，所以我决定继续维护这个项目,并添加新功能。
 > [版本变化详情](https://github.com/Lambdua/openai4j/releases)
 
-# OpenAI-Java
 
 用于使用OpenAI的GPT API的Java库。支持openAi所有的模型,支持最新的gpt4-trubo识图模型
 
@@ -25,7 +30,7 @@
 
 ### Gradle
 
-`implementation 'io.github.lambdua:<api|client|service>:0.19.1'`
+`implementation 'io.github.lambdua:<api|client|service>:0.20.0'`
 
 ### Maven
 
@@ -34,7 +39,7 @@
 <dependency>
     <groupId>io.github.lambdua</groupId>
     <artifactId>service</artifactId>
-    <version>0.19.1</version>
+    <version>0.20.0</version>
 </dependency>
 ```
 
@@ -45,7 +50,7 @@
 <dependency>
     <groupId>io.github.lambdua</groupId>
     <artifactId>api</artifactId>
-    <version>0.19.1</version>
+    <version>0.20.0</version>
 </dependency>
 ```
 
@@ -80,7 +85,7 @@ blockingForEach(System.out::println);
 openAiService支持多种方式创建,你可以参考example包中的`example.ServiceCreateExample`示例
 
 ```java
-//1.使用默认的baseUrl,默认配置service,这里会默认先从环境变量中获取BaseURL(key:OPENAI_API_BASE_URL),如果没有则使用默认的"https://api.openai.com/";
+//1.使用默认的baseUrl,默认配置service,这里会默认先从环境变量中获取BaseURL(key:OPENAI_API_BASE_URL),如果没有则使用默认的"https://api.openai.com/v1/";
 OpenAiService openAiService = new OpenAiService(API_KEY);
 //2. 使用自定义的baseUrl,默认配置配置service
 OpenAiService openAiService1 = new OpenAiService(API_KEY, BASE_URL);
@@ -187,13 +192,12 @@ final ChatTool tool = new ChatTool(function);
 final List<ChatMessage> messages = new ArrayList<>();
 final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
 final ChatMessage userMessage = new UserMessage("What is the weather in Monterrey, Nuevo León?");
-        messages.
+messages.
 
 add(systemMessage);
-        messages.
+messages.
 
 add(userMessage);
-
 ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
         .builder()
         .model("gpt-3.5-turbo-0613")

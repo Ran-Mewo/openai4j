@@ -4,20 +4,32 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.theokanning.openai.*;
-import com.theokanning.openai.assistants.assistant.*;
+import com.theokanning.openai.assistants.assistant.Assistant;
+import com.theokanning.openai.assistants.assistant.AssistantRequest;
+import com.theokanning.openai.assistants.assistant.ModifyAssistantRequest;
+import com.theokanning.openai.assistants.assistant.VectorStoreFileRequest;
 import com.theokanning.openai.assistants.message.Message;
-import com.theokanning.openai.assistants.message.MessageFile;
 import com.theokanning.openai.assistants.message.MessageRequest;
 import com.theokanning.openai.assistants.message.ModifyMessageRequest;
 import com.theokanning.openai.assistants.run.*;
+import com.theokanning.openai.assistants.run_step.RunStep;
 import com.theokanning.openai.assistants.thread.Thread;
 import com.theokanning.openai.assistants.thread.ThreadRequest;
+import com.theokanning.openai.assistants.vector_store.ModifyVectorStoreRequest;
+import com.theokanning.openai.assistants.vector_store.VectorStore;
+import com.theokanning.openai.assistants.vector_store.VectorStoreRequest;
+import com.theokanning.openai.assistants.vector_store_file.VectorStoreFile;
+import com.theokanning.openai.assistants.vector_store_file_batch.VectorStoreFilesBatch;
+import com.theokanning.openai.assistants.vector_store_file_batch.VectorStoreFilesBatchRequest;
 import com.theokanning.openai.audio.*;
+import com.theokanning.openai.batch.Batch;
+import com.theokanning.openai.batch.BatchRequest;
 import com.theokanning.openai.billing.BillingUsage;
 import com.theokanning.openai.billing.Subscription;
+import com.theokanning.openai.client.AuthenticationInterceptor;
 import com.theokanning.openai.client.OpenAiApi;
 import com.theokanning.openai.completion.CompletionChunk;
 import com.theokanning.openai.completion.CompletionRequest;
@@ -38,6 +50,8 @@ import com.theokanning.openai.image.ImageResult;
 import com.theokanning.openai.model.Model;
 import com.theokanning.openai.moderation.ModerationRequest;
 import com.theokanning.openai.moderation.ModerationResult;
+import com.theokanning.openai.service.assistant_stream.AssistantResponseBodyCallback;
+import com.theokanning.openai.service.assistant_stream.AssistantSSE;
 import io.reactivex.BackpressureStrategy;
 import io.reactivex.Flowable;
 import io.reactivex.Single;
@@ -59,6 +73,11 @@ import java.util.concurrent.TimeUnit;
 public class OpenAiService {
 
     private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1/";
+
+    public static final String API_BASE_URL_ENV = "OPENAI_API_BASE_URL";
+
+    public static final String API_KEY_ENV = "OPENAI_API_KEY";
+
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
     private static final ObjectMapper mapper = defaultObjectMapper();
 
@@ -66,12 +85,23 @@ public class OpenAiService {
     private final ExecutorService executorService;
 
     /**
+     * Creates a new OpenAiService that wraps OpenAiApi,user OPENAI_API_KEY from environment variable
+     */
+    public OpenAiService() {
+        this(System.getenv(API_KEY_ENV));
+    }
+
+    public OpenAiService(Duration timeout) {
+        this(System.getenv(API_KEY_ENV), timeout);
+    }
+
+    /**
      * Creates a new OpenAiService that wraps OpenAiApi
      *
      * @param token OpenAi token string "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
      */
     public OpenAiService(final String token) {
-        this(token, DEFAULT_TIMEOUT, System.getenv("OPENAI_API_BASE_URL") != null ? System.getenv("OPENAI_API_BASE_URL") : DEFAULT_BASE_URL);
+        this(token, DEFAULT_TIMEOUT, System.getenv(API_BASE_URL_ENV) != null ? System.getenv(API_BASE_URL_ENV) : DEFAULT_BASE_URL);
     }
 
     public OpenAiService(final String token, final String baseUrl) {
@@ -85,7 +115,7 @@ public class OpenAiService {
      * @param timeout http read timeout, Duration.ZERO means no timeout
      */
     public OpenAiService(final String token, final Duration timeout) {
-        this(token, timeout, System.getenv("OPENAI_API_BASE_URL") != null ? System.getenv("OPENAI_API_BASE_URL") : DEFAULT_BASE_URL);
+        this(token, timeout, System.getenv(API_BASE_URL_ENV) != null ? System.getenv(API_BASE_URL_ENV) : DEFAULT_BASE_URL);
     }
 
     /**
@@ -139,14 +169,17 @@ public class OpenAiService {
         return execute(api.getModel(modelId));
     }
 
-    public CompletionResult createCompletion(CompletionRequest request) {
-        return execute(api.createCompletion(request));
+    public static OpenAiApi buildApi(String token, Duration timeout) {
+        return buildApi(token, timeout, System.getenv(API_BASE_URL_ENV) != null ? System.getenv(API_BASE_URL_ENV) : DEFAULT_BASE_URL);
     }
 
-    public Flowable<CompletionChunk> streamCompletion(CompletionRequest request) {
-        request.setStream(true);
-
-        return stream(api.createCompletionStream(request), CompletionChunk.class);
+    public static ObjectMapper defaultObjectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+        mapper.addMixIn(ChatFunction.class, ChatFunctionMixIn.class);
+        return mapper;
     }
 
     public ChatCompletionResult createChatCompletion(ChatCompletionRequest request) {
@@ -155,7 +188,6 @@ public class OpenAiService {
 
     public Flowable<ChatCompletionChunk> streamChatCompletion(ChatCompletionRequest request) {
         request.setStream(true);
-
         return stream(api.createChatCompletionStream(request), ChatCompletionChunk.class);
     }
 
@@ -171,13 +203,9 @@ public class OpenAiService {
         return execute(api.listFiles()).data;
     }
 
-    public File uploadFile(String purpose, String filepath) {
-        java.io.File file = new java.io.File(filepath);
-        RequestBody purposeBody = RequestBody.create(MultipartBody.FORM, purpose);
-        RequestBody fileBody = RequestBody.create(MediaType.parse("text"), file);
-        MultipartBody.Part body = MultipartBody.Part.createFormData("file", filepath, fileBody);
-
-        return execute(api.uploadFile(purposeBody, body));
+    @Deprecated
+    public CompletionResult createCompletion(CompletionRequest request) {
+        return execute(api.createCompletion(request));
     }
 
     public DeleteResult deleteFile(String fileId) {
@@ -212,15 +240,35 @@ public class OpenAiService {
         return execute(api.listFineTuningJobEvents(fineTuningJobId)).data;
     }
 
-
-    public CompletionResult createFineTuneCompletion(CompletionRequest request) {
-        return execute(api.createFineTuneCompletion(request));
+    @Deprecated
+    public Flowable<CompletionChunk> streamCompletion(CompletionRequest request) {
+        request.setStream(true);
+        return stream(api.createCompletionStream(request), CompletionChunk.class);
     }
 
-
-    public DeleteResult deleteFineTune(String fineTuneId) {
-        return execute(api.deleteFineTune(fineTuneId));
+    /**
+     * @param purpose file purpose,support: batch,fine-tune,assistants
+     */
+    public File uploadFile(String purpose, String filepath) {
+        java.io.File file = new java.io.File(filepath);
+        RequestBody purposeBody = RequestBody.create(MultipartBody.FORM, purpose);
+        RequestBody fileBody = RequestBody.create(MediaType.parse("text"), file);
+        MultipartBody.Part body = MultipartBody.Part.createFormData("file", file.getName(), fileBody);
+        return execute(api.uploadFile(purposeBody, body));
     }
+
+    public Batch createBatch(BatchRequest request) {
+        return execute(api.createBatch(request));
+    }
+
+    public Batch retrieveBatch(String batchId) {
+        return execute(api.retrieveBatch(batchId));
+    }
+
+    public static Flowable<AssistantSSE> assistantStream(Call<ResponseBody> apiCall) {
+        return Flowable.create(emitter -> apiCall.enqueue(new AssistantResponseBodyCallback(emitter)), BackpressureStrategy.BUFFER);
+    }
+
 
     public ImageResult createImage(CreateImageRequest request) {
         return execute(api.createImage(request));
@@ -371,24 +419,6 @@ public class OpenAiService {
         return execute(api.listAssistants(queryParameters));
     }
 
-    public AssistantFile createAssistantFile(String assistantId, AssistantFileRequest fileRequest) {
-        return execute(api.createAssistantFile(assistantId, fileRequest));
-    }
-
-    public AssistantFile retrieveAssistantFile(String assistantId, String fileId) {
-        return execute(api.retrieveAssistantFile(assistantId, fileId));
-    }
-
-    public DeleteResult deleteAssistantFile(String assistantId, String fileId) {
-        return execute(api.deleteAssistantFile(assistantId, fileId));
-    }
-
-    public OpenAiResponse<AssistantFile> listAssistantFiles(String assistantId, ListSearchParameters params) {
-        Map<String, Object> queryParameters = mapper.convertValue(params, new TypeReference<Map<String, Object>>() {
-        });
-        return execute(api.listAssistantFiles(assistantId, queryParameters));
-    }
-
     public Thread createThread(ThreadRequest request) {
         return execute(api.createThread(request));
     }
@@ -417,40 +447,30 @@ public class OpenAiService {
         return execute(api.modifyMessage(threadId, messageId, request));
     }
 
-    public OpenAiResponse<Message> listMessages(String threadId) {
-        return execute(api.listMessages(threadId));
-    }
-
     public OpenAiResponse<Message> listMessages(String threadId, ListSearchParameters params) {
         Map<String, Object> queryParameters = mapper.convertValue(params, new TypeReference<Map<String, Object>>() {
         });
         return execute(api.listMessages(threadId, queryParameters));
     }
 
-    public MessageFile retrieveMessageFile(String threadId, String messageId, String fileId) {
-        return execute(api.retrieveMessageFile(threadId, messageId, fileId));
-    }
-
-    public OpenAiResponse<MessageFile> listMessageFiles(String threadId, String messageId) {
-        return execute(api.listMessageFiles(threadId, messageId));
-    }
-
-    public OpenAiResponse<MessageFile> listMessageFiles(String threadId, String messageId, ListSearchParameters params) {
-        Map<String, Object> queryParameters = mapper.convertValue(params, new TypeReference<Map<String, Object>>() {
-        });
-        return execute(api.listMessageFiles(threadId, messageId, queryParameters));
-    }
 
     public Run createRun(String threadId, RunCreateRequest runCreateRequest) {
         return execute(api.createRun(threadId, runCreateRequest));
     }
 
+    public OpenAiResponse<Batch> listBatches(ListSearchParameters params) {
+        Map<String, Object> queryParameters = mapper.convertValue(params, new TypeReference<Map<String, Object>>() {
+        });
+        return execute(api.listBatches(queryParameters));
+    }
+
+
     public Run retrieveRun(String threadId, String runId) {
         return execute(api.retrieveRun(threadId, runId));
     }
 
-    public Run modifyRun(String threadId, String runId, Map<String, String> metadata) {
-        return execute(api.modifyRun(threadId, runId, metadata));
+    public Run modifyRun(String threadId, String runId, ModifyRunRequest request) {
+        return execute(api.modifyRun(threadId, runId, request));
     }
 
     public OpenAiResponse<Run> listRuns(String threadId, ListSearchParameters listSearchParameters) {
@@ -466,6 +486,12 @@ public class OpenAiService {
         return execute(api.submitToolOutputs(threadId, runId, submitToolOutputsRequest));
     }
 
+    public Flowable<AssistantSSE> createRunStream(String threadId, RunCreateRequest runCreateRequest) {
+        runCreateRequest.setStream(true);
+        return assistantStream(api.createRunStream(threadId, runCreateRequest));
+    }
+
+
     public Run cancelRun(String threadId, String runId) {
         return execute(api.cancelRun(threadId, runId));
     }
@@ -473,6 +499,13 @@ public class OpenAiService {
     public Run createThreadAndRun(CreateThreadAndRunRequest createThreadAndRunRequest) {
         return execute(api.createThreadAndRun(createThreadAndRunRequest));
     }
+
+    public Flowable<AssistantSSE> createThreadAndRunStream(CreateThreadAndRunRequest createThreadAndRunRequest) {
+        createThreadAndRunRequest.setStream(true);
+        return assistantStream(api.createThreadAndRunStream(createThreadAndRunRequest));
+    }
+
+
 
     public RunStep retrieveRunStep(String threadId, String runId, String stepId) {
         return execute(api.retrieveRunStep(threadId, runId, stepId));
@@ -485,6 +518,89 @@ public class OpenAiService {
             search = mapper.convertValue(listSearchParameters, Map.class);
         }
         return execute(api.listRunSteps(threadId, runId, search));
+    }
+
+
+    public VectorStore createVectorStore(VectorStoreRequest request) {
+        return execute(api.createVectorStore(request));
+    }
+
+    public OpenAiResponse<VectorStore> listVectorStores(ListSearchParameters listSearchParameters) {
+        Map<String, Object> search = new HashMap<>();
+        if (listSearchParameters != null) {
+            ObjectMapper mapper = defaultObjectMapper();
+            search = mapper.convertValue(listSearchParameters, Map.class);
+        }
+        return execute(api.listVectorStores(search));
+    }
+
+    public VectorStore retrieveVectorStore(String vectorStoreId) {
+        return execute(api.retrieveVectorStore(vectorStoreId));
+    }
+
+    public VectorStore modifyVectorStore(String vectorStoreId, ModifyVectorStoreRequest request) {
+        return execute(api.modifyVectorStore(vectorStoreId, request));
+    }
+
+    public DeleteResult deleteVectorStore(String vectorStoreId) {
+        return execute(api.deleteVectorStore(vectorStoreId));
+    }
+
+    public VectorStoreFile createVectorStoreFile(String vectorStoreId, VectorStoreFileRequest fileRequest) {
+        return execute(api.createVectorStoreFile(vectorStoreId, fileRequest));
+    }
+
+    public OpenAiResponse<VectorStoreFile> listVectorStoreFiles(String vectorStoreId, ListSearchParameters listSearchParameters) {
+        Map<String, Object> search = new HashMap<>();
+        if (listSearchParameters != null) {
+            ObjectMapper mapper = defaultObjectMapper();
+            search = mapper.convertValue(listSearchParameters, Map.class);
+        }
+        return execute(api.listVectorStoreFiles(vectorStoreId, search));
+    }
+
+    public VectorStoreFile retrieveVectorStoreFile(String vectorStoreId, String fileId) {
+        return execute(api.retrieveVectorStoreFile(vectorStoreId, fileId));
+    }
+
+    public DeleteResult deleteVectorStoreFile(String vectorStoreId, String fileId) {
+        return execute(api.deleteVectorStoreFile(vectorStoreId, fileId));
+    }
+
+    public VectorStoreFilesBatch createVectorStoreFileBatch(String vectorStoreId, VectorStoreFilesBatchRequest request) {
+        return execute(api.createVectorStoreFileBatch(vectorStoreId, request));
+    }
+
+    public VectorStoreFilesBatch retrieveVectorStoreFileBatch(String vectorStoreId, String batchId) {
+        return execute(api.retrieveVectorStoreFileBatch(vectorStoreId, batchId));
+    }
+
+    public VectorStoreFilesBatch cancelVectorStoreFileBatch(String vectorStoreId, String batchId) {
+        return execute(api.cancelVectorStoreFileBatch(vectorStoreId, batchId));
+    }
+
+    public OpenAiResponse<VectorStoreFile> listVectorStoreFilesInBatch(String vectorStoreId, String batchId, ListSearchParameters listSearchParameters) {
+        Map<String, Object> search = new HashMap<>();
+        if (listSearchParameters != null) {
+            ObjectMapper mapper = defaultObjectMapper();
+            search = mapper.convertValue(listSearchParameters, Map.class);
+        }
+        return execute(api.listVectorStoreFilesInBatch(vectorStoreId, batchId, search));
+    }
+
+    public Flowable<AssistantSSE> submitToolOutputsStream(String threadId, String runId, SubmitToolOutputsRequest submitToolOutputsRequest) {
+        submitToolOutputsRequest.setStream(true);
+        return assistantStream(api.submitToolOutputsStream(threadId, runId, submitToolOutputsRequest));
+    }
+
+    /**
+     * Account information inquiry: including total amount and other information.
+     *
+     * @return Account information.
+     */
+    public Subscription subscription() {
+        Single<Subscription> subscription = api.subscription();
+        return subscription.blockingGet();
     }
 
     /**
@@ -520,6 +636,21 @@ public class OpenAiService {
     }
 
     /**
+     * Account API consumption amount information inquiry.
+     * Up to 100 days of inquiry.
+     *
+     * @param starDate
+     * @param endDate
+     * @return Consumption amount information.
+     */
+    public BillingUsage billingUsage(@NotNull LocalDate starDate, @NotNull LocalDate endDate) {
+        Single<BillingUsage> billingUsage = api.billingUsage(starDate, endDate);
+        return billingUsage.blockingGet();
+    }
+
+
+
+    /**
      * Calls the Open AI api and returns a Flowable of SSE for streaming.
      *
      * @param apiCall  The api call
@@ -551,8 +682,8 @@ public class OpenAiService {
         this.executorService.shutdown();
     }
 
-    public static OpenAiApi buildApi(String token, Duration timeout) {
-        return buildApi(token, timeout, System.getenv("OPENAI_API_BASE_URL") != null ? System.getenv("OPENAI_API_BASE_URL") : DEFAULT_BASE_URL);
+    public Batch cancelBatch(String batchId) {
+        return execute(api.cancelBatch(batchId));
     }
 
     public static OpenAiApi buildApi(String token, Duration timeout, String baseUrl) {
@@ -563,16 +694,6 @@ public class OpenAiService {
         return retrofit.create(OpenAiApi.class);
     }
 
-    public static ObjectMapper defaultObjectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        mapper.setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE);
-        mapper.addMixIn(ChatFunction.class, ChatFunctionMixIn.class);
-        mapper.addMixIn(ChatCompletionRequest.class, ChatCompletionRequestMixIn.class);
-        mapper.addMixIn(ChatFunctionCall.class, ChatFunctionCallMixIn.class);
-        return mapper;
-    }
 
     public static OkHttpClient defaultClient(String token, Duration timeout) {
         return new OkHttpClient.Builder()
@@ -654,29 +775,6 @@ public class OpenAiService {
 
             return new ChatMessageAccumulator(messageChunk, accumulatedMessage);
         });
-    }
-
-    /**
-     * Account information inquiry: including total amount and other information.
-     *
-     * @return Account information.
-     */
-    public Subscription subscription() {
-        Single<Subscription> subscription = api.subscription();
-        return subscription.blockingGet();
-    }
-
-    /**
-     * Account API consumption amount information inquiry.
-     * Up to 100 days of inquiry.
-     *
-     * @param starDate
-     * @param endDate
-     * @return Consumption amount information.
-     */
-    public BillingUsage billingUsage(@NotNull LocalDate starDate, @NotNull LocalDate endDate) {
-        Single<BillingUsage> billingUsage = api.billingUsage(starDate, endDate);
-        return billingUsage.blockingGet();
     }
 
 }

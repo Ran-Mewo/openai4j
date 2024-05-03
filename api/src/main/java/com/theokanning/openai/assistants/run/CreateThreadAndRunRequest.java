@@ -93,9 +93,9 @@ public class CreateThreadAndRunRequest {
      * Specifying a particular tool like {"type": "file_search"} or {"type": "function", "function": {"name": "my_function"}} forces the model to call that tool.
      */
     @JsonProperty("tool_choice")
-    @JsonSerialize(using = ToolChoiceSerializer.class)
-    @JsonDeserialize(using = ToolChoiceDeserializer.class)
-    Object toolChoice;
+    @JsonSerialize(using = ToolChoice.Serializer.class)
+    @JsonDeserialize(using = ToolChoice.Deserializer.class)
+    ToolChoice toolChoice;
 
     /**
      * Specifies the format that the model must output. Compatible with GPT-4 Turbo and all GPT-3.5 Turbo models since gpt-3.5-turbo-1106.
@@ -105,9 +105,10 @@ public class CreateThreadAndRunRequest {
      * Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly "stuck" request.
      * Also note that the message content may be partially cut off if finish_reason="length", which indicates the generation exceeded max_tokens or the conversation exceeded the max context length.
      * <p>
-     * !! default String : auto,Here, directly reuse the Chat Response Format under the Chat package. If it is auto, do not pass the response format !!
      */
     @JsonProperty("response_format")
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonSerialize(using = ChatResponseFormat.ChatResponseFormatSerializer.class)
+    @JsonDeserialize(using = ChatResponseFormat.ChatResponseFormatDeserializer.class)
     ChatResponseFormat responseFormat;
 }

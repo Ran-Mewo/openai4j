@@ -1,5 +1,6 @@
 plugins {
     id 'java' apply true
+    id "io.freefair.lombok" version "8.6" apply true
     id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
     id "com.vanniktech.maven.publish" version "0.19.0" apply false
 }
@@ -7,6 +8,7 @@ plugins {
 allprojects {
     apply plugin: 'java'
     apply plugin: 'com.github.johnrengelman.shadow'
+    apply plugin: 'io.freefair.lombok'
 
     plugins.withId("com.vanniktech.maven.publish") {
         mavenPublish {
@@ -35,7 +37,7 @@ allprojects {
     compileJava.options.encoding = 'UTF-8'
 }
 
-task fatJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+shadowJar {
     configurations = [project.configurations.runtimeClasspath]
     from subprojects.collect { it.shadowJar.outputs.files }
     archiveBaseName.set('openai4j')

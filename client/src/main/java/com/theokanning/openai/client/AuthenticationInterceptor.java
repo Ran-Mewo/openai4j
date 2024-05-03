@@ -13,7 +13,7 @@ public class AuthenticationInterceptor implements Interceptor {
 
     private final String token;
 
-    protected AuthenticationInterceptor(String token) {
+    public AuthenticationInterceptor(String token) {
         this.token = token;
     }
 

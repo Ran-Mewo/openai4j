@@ -1,6 +1,9 @@
 package com.theokanning.openai.completion.chat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.theokanning.openai.assistants.run.ToolChoice;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +18,8 @@ import java.util.Map;
 @NoArgsConstructor
 public class ChatCompletionRequest {
 
+
+
     /**
      * ID of the model to use.
      */
@@ -23,14 +28,12 @@ public class ChatCompletionRequest {
     /**
      * The messages to generate chat completions for, in the <a
      * href="https://platform.openai.com/docs/guides/chat/introduction">chat format</a>.<br>
-     * see {@link ChatMessage}
      */
     List<ChatMessage> messages;
 
     /**
      * Must be either 'text' or 'json_object'. <br>
      * When specifying 'json_object' as the request format it's still necessary to instruct the model to return JSON.
-     * You may use {@link ChatResponseFormat.ResponseFormat} enum.
      */
     @JsonProperty("response_format")
     ChatResponseFormat responseFormat;
@@ -114,7 +117,10 @@ public class ChatCompletionRequest {
      */
     @JsonProperty("function_call")
     @Deprecated
-    ChatCompletionRequestFunctionCall functionCall;
+    @JsonSerialize(using = ChatCompletionRequestFunctionCall.Serializer.class)
+    @JsonDeserialize(using = ChatCompletionRequestFunctionCall.Deserializer.class)
+    Object functionCall;
+
 
     /**
      * This feature is in Beta. If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed, and you should refer to the system_fingerprint response parameter to monitor changes in the backend.
@@ -132,18 +138,6 @@ public class ChatCompletionRequest {
     @JsonProperty("top_logprobs")
     Integer topLogprobs;
 
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class ChatCompletionRequestFunctionCall {
-        String name;
-
-        public static ChatCompletionRequestFunctionCall of(String name) {
-            return new ChatCompletionRequestFunctionCall(name);
-        }
-
-    }
 
     /**
      * A list of tools the model may call. Currently, only functions are supported as a tool.
@@ -154,7 +148,39 @@ public class ChatCompletionRequest {
      * Controls which (if any) function is called by the model. none means the model will not call a function and instead generates a message. auto means the model can pick between generating a message or calling a function.
      */
     @JsonProperty("tool_choice")
-    String toolChoice;
+    @JsonSerialize(using = ToolChoice.Serializer.class)
+    @JsonDeserialize(using = ToolChoice.Deserializer.class)
+    ToolChoice toolChoice;
 
 
+
+    public static ChatCompletionRequestBuilder builder() {
+        return new InternalBuilder();
+    }
+    private static class InternalBuilder extends ChatCompletionRequestBuilder {
+        public InternalBuilder() {
+            super();
+        }
+
+        @Override
+        public ChatCompletionRequest build() {
+            ChatCompletionRequest request = super.build();
+            request.functionCallParamCheck();
+            return request;
+        }
+    }
+
+    private void functionCallParamCheck() {
+        if (functionCall==null){
+            return;
+        }
+        if (!(functionCall instanceof ChatCompletionRequestFunctionCall || functionCall instanceof String)) {
+            throw new IllegalArgumentException("functionCall must be a ChatCompletionRequestFunctionCall or a String type");
+        }
+    }
+
+    public void setFunctionCall(Object functionCall) {
+        this.functionCall = functionCall;
+        functionCallParamCheck();
+    }
 }
