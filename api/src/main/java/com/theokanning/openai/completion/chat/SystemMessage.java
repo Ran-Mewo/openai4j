@@ -4,9 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.NonNull;
 
 import java.util.*;
 
@@ -19,9 +19,9 @@ import java.util.*;
 
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class SystemMessage implements ChatMessage {
-    @NonNull
-    final String role = ChatMessageRole.SYSTEM.value();
+    private final String role = ChatMessageRole.SYSTEM.value();
 
 
     // content should always exist in the call, even if it is null
@@ -31,16 +31,33 @@ public class SystemMessage implements ChatMessage {
     private Object content;
 
     //An optional name for the participant. Provides the model information to differentiate between participants of the same role.
-    String name;
+    private String name;
 
 
     public SystemMessage(Object content) {
         this.content = content;
+        contentTypeCheck();
     }
 
-    public SystemMessage(Object content, String name) {
+    public void setContent(Object content) {
         this.content = content;
-        this.name = name;
+        contentTypeCheck();
+    }
+
+    private void contentTypeCheck() {
+        if (content instanceof String) {
+            return;
+        }
+        if (content instanceof Collection) {
+            Collection collection = (Collection) content;
+            collection.forEach(item -> {
+                if (!(item instanceof ImageContent)) {
+                    throw new IllegalArgumentException("content must be a string or a collection of ImageContent");
+                }
+            });
+            return;
+        }
+        throw new IllegalArgumentException("content must be a string or a collection of ImageContent");
     }
 
     @Override
