@@ -28,12 +28,12 @@ public class UserMessage implements ChatMessage {
 
     public UserMessage(Object content) {
         this.content = content;
-        contentTypeCheck();
+//        contentTypeCheck();
     }
 
     public void setContent(Object content) {
         this.content = content;
-        contentTypeCheck();
+//        contentTypeCheck();
     }
 
     private void contentTypeCheck() {
