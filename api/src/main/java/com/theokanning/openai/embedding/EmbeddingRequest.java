@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Creates an embedding vector representing the input text.
- *
+ * <p>
  * https://beta.openai.com/docs/api-reference/embeddings/create
  */
 @Builder
@@ -15,23 +15,53 @@ import java.util.List;
 @AllArgsConstructor
 @Data
 public class EmbeddingRequest {
-
     /**
      * The name of the model to use.
      * Required if using the new v1/embeddings endpoint.
      */
+    @NonNull
     String model;
-
     /**
-     * Input text to get embeddings for, encoded as a string or array of tokens.
-     * To get embeddings for multiple inputs in a single request, pass an array of strings or array of token arrays.
-     * Each input must not exceed 2048 tokens in length.
+     * input text to embed, encoded as a string or array of tokens. To embed multiple inputs in a single request, pass an array of strings or array of token arrays.
+     * The input must not exceed the max input tokens for the model (8192 tokens for text-embedding-ada-002), cannot be an empty string, and any array must be 2048 dimensions or less. <br> <br>
      * <p>
-     * Unless you are embedding code, we suggest replacing newlines (\n) in your input with a single space,
-     * as we have observed inferior results when newlines are present.
+     * input allow type of :String/Integer/List<String>/List<Integer>/List<List<Integer>>   <br>
+     * Also you can use {@link InternalBuilder#input(Object)} to check the input, it will automatically check the input type.
      */
     @NonNull
-    List<String> input;
+    Object input;
+
+    public static EmbeddingRequestBuilder builder() {
+        return new InternalBuilder();
+    }
+
+    private static class InternalBuilder extends EmbeddingRequestBuilder {
+
+        @Builder
+        @SuppressWarnings("unchecked")
+        public EmbeddingRequestBuilder input(@NonNull Object input) {
+            if (input instanceof String) {
+                return super.input(input);
+            }
+            if (input instanceof List) {
+                List tem = (List) input;
+                if (tem.stream().allMatch(String.class::isInstance)) {
+                    return super.input(input);
+                }
+                if (tem.stream().allMatch(Integer.class::isInstance)) {
+                    return super.input(input);
+                }
+
+                if (tem.stream().allMatch(List.class::isInstance)) {
+                    List<List> tem2 = (List<List>) input;
+                    if (tem2.stream().flatMap(List::stream).allMatch(Integer.class::isInstance)) {
+                        return super.input(input);
+                    }
+                }
+            }
+            throw new IllegalArgumentException("input must be String/Integer/List<String>/List<Integer>/List<List<Integer>>");
+        }
+    }
 
     /**
      * The format to return the embeddings in. Can be either float or base64.
@@ -48,5 +78,6 @@ public class EmbeddingRequest {
      * A unique identifier representing your end-user, which will help OpenAI to monitor and detect abuse.
      */
     String user;
+
 
 }

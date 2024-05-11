@@ -26,30 +26,12 @@ public class UserMessage implements ChatMessage {
     //An optional name for the participant. Provides the model information to differentiate between participants of the same role.
     private String name;
 
-    public UserMessage(Object content) {
+    public UserMessage(String content) {
         this.content = content;
-//        contentTypeCheck();
     }
 
-    public void setContent(Object content) {
-        this.content = content;
-//        contentTypeCheck();
-    }
-
-    private void contentTypeCheck() {
-        if (content instanceof String) {
-            return;
-        }
-        if (content instanceof Collection) {
-            Collection collection = (Collection) content;
-            collection.forEach(item -> {
-                if (!(item instanceof ImageContent)) {
-                    throw new IllegalArgumentException("content must be a string or a collection of ImageContent");
-                }
-            });
-            return;
-        }
-        throw new IllegalArgumentException("content must be a string or a collection of ImageContent");
+    public UserMessage(List<ImageContent> imageContents) {
+        this.content = imageContents;
     }
 
     @Override
@@ -59,9 +41,12 @@ public class UserMessage implements ChatMessage {
             return (String) content;
         }
         if (content instanceof Collection) {
-            Collection<ImageContent> collection = (Collection<ImageContent>) content;
-            for (ImageContent item : collection) {
-                if (item.getType().equals("text")) return item.getText();
+            Collection collection = (Collection) content;
+            Optional<String> text = collection.stream().filter(item -> item instanceof ImageContent)
+                    .filter(imageContent -> ((ImageContent) imageContent).getType().equals("text"))
+                    .findFirst().map(imageContent -> ((ImageContent) imageContent).getText());
+            if (text.isPresent()) {
+                return text.get();
             }
         }
         return null;
@@ -73,7 +58,7 @@ public class UserMessage implements ChatMessage {
      * @param text      query text
      * @param imageUrls image urls
      * @return com.theokanning.openai.completion.chat.UserMessage
-     * @author liangtao, Ran
+     * @author liangtao
      * @date 2024/4/12
      **/
     @JsonIgnore

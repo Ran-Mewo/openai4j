@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.theokanning.openai.*;
 import com.theokanning.openai.assistants.assistant.Assistant;
@@ -12,6 +11,7 @@ import com.theokanning.openai.assistants.assistant.AssistantRequest;
 import com.theokanning.openai.assistants.assistant.ModifyAssistantRequest;
 import com.theokanning.openai.assistants.assistant.VectorStoreFileRequest;
 import com.theokanning.openai.assistants.message.Message;
+import com.theokanning.openai.assistants.message.MessageListSearchParameters;
 import com.theokanning.openai.assistants.message.MessageRequest;
 import com.theokanning.openai.assistants.message.ModifyMessageRequest;
 import com.theokanning.openai.assistants.run.*;
@@ -63,7 +63,10 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 import retrofit2.converter.jackson.JacksonConverterFactory;
 
 import javax.validation.constraints.NotNull;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.*;
@@ -177,7 +180,6 @@ public class OpenAiService {
         ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-        mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
         mapper.addMixIn(ChatFunction.class, ChatFunctionMixIn.class);
         return mapper;
     }
@@ -251,11 +253,28 @@ public class OpenAiService {
      */
     public File uploadFile(String purpose, String filepath) {
         java.io.File file = new java.io.File(filepath);
+        try {
+            return uploadFile(purpose, new FileInputStream(file), file.getName());
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Upload a file using InputStream.
+     *
+     * @param purpose         file purpose, Use "assistants" for Assistants and Messages, "batch" for Batch API, and "fine-tune" for Fine-tuning.
+     * @param fileInputStream the input stream of the file to be uploaded
+     * @param filename        the name of the file to be uploaded
+     * @return the File object returned by the API after the file is uploaded
+     */
+    public File uploadFile(String purpose, InputStream fileInputStream, String filename) {
         RequestBody purposeBody = RequestBody.create(MultipartBody.FORM, purpose);
-        RequestBody fileBody = RequestBody.create(MediaType.parse("text"), file);
-        MultipartBody.Part body = MultipartBody.Part.createFormData("file", file.getName(), fileBody);
+        RequestBody fileBody = RequestBody.create(FileUtil.getFileUploadMediaType(filename), FileUtil.readAllBytes(fileInputStream));
+        MultipartBody.Part body = MultipartBody.Part.createFormData("file", filename, fileBody);
         return execute(api.uploadFile(purposeBody, body));
     }
+
 
     public Batch createBatch(BatchRequest request) {
         return execute(api.createBatch(request));
@@ -447,7 +466,7 @@ public class OpenAiService {
         return execute(api.modifyMessage(threadId, messageId, request));
     }
 
-    public OpenAiResponse<Message> listMessages(String threadId, ListSearchParameters params) {
+    public OpenAiResponse<Message> listMessages(String threadId, MessageListSearchParameters params) {
         Map<String, Object> queryParameters = mapper.convertValue(params, new TypeReference<Map<String, Object>>() {
         });
         return execute(api.listMessages(threadId, queryParameters));
@@ -476,7 +495,6 @@ public class OpenAiService {
     public OpenAiResponse<Run> listRuns(String threadId, ListSearchParameters listSearchParameters) {
         Map<String, String> search = new HashMap<>();
         if (listSearchParameters != null) {
-            ObjectMapper mapper = defaultObjectMapper();
             search = mapper.convertValue(listSearchParameters, Map.class);
         }
         return execute(api.listRuns(threadId, search));
@@ -506,7 +524,6 @@ public class OpenAiService {
     }
 
 
-
     public RunStep retrieveRunStep(String threadId, String runId, String stepId) {
         return execute(api.retrieveRunStep(threadId, runId, stepId));
     }
@@ -514,7 +531,6 @@ public class OpenAiService {
     public OpenAiResponse<RunStep> listRunSteps(String threadId, String runId, ListSearchParameters listSearchParameters) {
         Map<String, String> search = new HashMap<>();
         if (listSearchParameters != null) {
-            ObjectMapper mapper = defaultObjectMapper();
             search = mapper.convertValue(listSearchParameters, Map.class);
         }
         return execute(api.listRunSteps(threadId, runId, search));
@@ -528,7 +544,6 @@ public class OpenAiService {
     public OpenAiResponse<VectorStore> listVectorStores(ListSearchParameters listSearchParameters) {
         Map<String, Object> search = new HashMap<>();
         if (listSearchParameters != null) {
-            ObjectMapper mapper = defaultObjectMapper();
             search = mapper.convertValue(listSearchParameters, Map.class);
         }
         return execute(api.listVectorStores(search));
@@ -553,7 +568,6 @@ public class OpenAiService {
     public OpenAiResponse<VectorStoreFile> listVectorStoreFiles(String vectorStoreId, ListSearchParameters listSearchParameters) {
         Map<String, Object> search = new HashMap<>();
         if (listSearchParameters != null) {
-            ObjectMapper mapper = defaultObjectMapper();
             search = mapper.convertValue(listSearchParameters, Map.class);
         }
         return execute(api.listVectorStoreFiles(vectorStoreId, search));
@@ -582,7 +596,6 @@ public class OpenAiService {
     public OpenAiResponse<VectorStoreFile> listVectorStoreFilesInBatch(String vectorStoreId, String batchId, ListSearchParameters listSearchParameters) {
         Map<String, Object> search = new HashMap<>();
         if (listSearchParameters != null) {
-            ObjectMapper mapper = defaultObjectMapper();
             search = mapper.convertValue(listSearchParameters, Map.class);
         }
         return execute(api.listVectorStoreFilesInBatch(vectorStoreId, batchId, search));
@@ -649,7 +662,6 @@ public class OpenAiService {
     }
 
 
-
     /**
      * Calls the Open AI api and returns a Flowable of SSE for streaming.
      *
@@ -687,7 +699,6 @@ public class OpenAiService {
     }
 
     public static OpenAiApi buildApi(String token, Duration timeout, String baseUrl) {
-        ObjectMapper mapper = defaultObjectMapper();
         OkHttpClient client = defaultClient(token, timeout);
         Retrofit retrofit = defaultRetrofit(client, mapper, baseUrl);
 
@@ -776,5 +787,6 @@ public class OpenAiService {
             return new ChatMessageAccumulator(messageChunk, accumulatedMessage);
         });
     }
+
 
 }

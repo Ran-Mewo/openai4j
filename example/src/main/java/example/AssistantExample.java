@@ -7,6 +7,7 @@ import com.theokanning.openai.OpenAiResponse;
 import com.theokanning.openai.assistants.StreamEvent;
 import com.theokanning.openai.assistants.assistant.*;
 import com.theokanning.openai.assistants.message.Message;
+import com.theokanning.openai.assistants.message.MessageListSearchParameters;
 import com.theokanning.openai.assistants.message.MessageRequest;
 import com.theokanning.openai.assistants.run.*;
 import com.theokanning.openai.assistants.run_step.RunStep;
@@ -14,7 +15,7 @@ import com.theokanning.openai.assistants.thread.Attachment;
 import com.theokanning.openai.assistants.thread.Thread;
 import com.theokanning.openai.assistants.thread.ThreadRequest;
 import com.theokanning.openai.file.File;
-import com.theokanning.openai.service.FunctionExecutor;
+import com.theokanning.openai.function.FunctionExecutorManager;
 import com.theokanning.openai.service.OpenAiService;
 import com.theokanning.openai.service.assistant_stream.AssistantSSE;
 import io.reactivex.Flowable;
@@ -33,7 +34,7 @@ import java.util.Optional;
  * @date 2024年04月30 13:30
  **/
 public class AssistantExample {
-    public static void main(String[] args) throws JsonProcessingException, UnsupportedEncodingException {
+    public static void main(String[] args) {
         // assistantToolCall();
         // assistantStream();
         // fileSearchExample();
@@ -43,7 +44,7 @@ public class AssistantExample {
 
     static void assistantToolCall() {
         OpenAiService service = new OpenAiService();
-        FunctionExecutor executor = new FunctionExecutor(Collections.singletonList(ToolUtil.weatherFunction()));
+        FunctionExecutorManager executor = new FunctionExecutorManager(Collections.singletonList(ToolUtil.weatherFunction()));
         AssistantRequest assistantRequest = AssistantRequest.builder()
                 .model("gpt-3.5-turbo").name("weather assistant")
                 .instructions("You are a weather assistant responsible for calling the weather API to return weather information based on the location entered by the user")
@@ -81,7 +82,7 @@ public class AssistantExample {
         ToolCallFunction function = toolCall.getFunction();
         String toolCallId = toolCall.getId();
 
-        SubmitToolOutputsRequest submitToolOutputsRequest = SubmitToolOutputsRequest.ofSingletonToolOutput(toolCallId, executor.executeAndConvertToJson(function).toPrettyString());
+        SubmitToolOutputsRequest submitToolOutputsRequest = SubmitToolOutputsRequest.ofSingletonToolOutput(toolCallId, executor.executeAndConvertToJson(function.getName(),function.getArguments()).toPrettyString());
         retrievedRun = service.submitToolOutputs(threadId, retrievedRun.getId(), submitToolOutputsRequest);
 
         while (!(retrievedRun.getStatus().equals("completed"))
@@ -94,7 +95,8 @@ public class AssistantExample {
 
         System.out.println(retrievedRun);
 
-        OpenAiResponse<Message> response = service.listMessages(threadId, new ListSearchParameters());
+        OpenAiResponse<Message> response = service.listMessages(threadId, MessageListSearchParameters.builder()
+                .runId(retrievedRun.getId()).build());
         List<Message> messages = response.getData();
         messages.forEach(message -> {
             System.out.println(message.getContent());
@@ -238,7 +240,7 @@ public class AssistantExample {
         for (RunStep runStep : runSteps) {
             System.out.println(runStep.getStepDetails());
         }
-        service.listMessages(threadId, new ListSearchParameters()).getData().forEach(message -> {
+        service.listMessages(threadId, new MessageListSearchParameters()).getData().forEach(message -> {
             System.out.println(message.getContent());
         });
     }
@@ -264,22 +266,22 @@ public class AssistantExample {
                 .content("What does the following value : 5+10*(2^3-2)*1```")
                 .build();
         service.createMessage(threadId, messageRequest);
-        // RunCreateRequest runCreateRequest = RunCreateRequest.builder()
-        //         .assistantId(assistantId)
-        //         .toolChoice(ToolChoice.AUTO)
-        //         .build();
-        // Run run = service.createRun(threadId, runCreateRequest);
-        // String runId = run.getId();
-        // do {
-        //     run = service.retrieveRun(threadId, runId);
-        // } while (!(run.getStatus().equals("completed")) && !(run.getStatus().equals("failed")));
-        // List<RunStep> runSteps = service.listRunSteps(threadId, runId, new ListSearchParameters()).getData();
-        // for (RunStep runStep : runSteps) {
-        //     System.out.println(runStep.getStepDetails());
-        // }
-        // service.listMessages(threadId, new ListSearchParameters()).getData().forEach(message -> {
-        //     System.out.println(message.getContent());
-        // });
+        RunCreateRequest runCreateRequest = RunCreateRequest.builder()
+                .assistantId(assistantId)
+                .toolChoice(ToolChoice.AUTO)
+                .build();
+        Run run = service.createRun(threadId, runCreateRequest);
+        String runId = run.getId();
+        do {
+            run = service.retrieveRun(threadId, runId);
+        } while (!(run.getStatus().equals("completed")) && !(run.getStatus().equals("failed")));
+        List<RunStep> runSteps = service.listRunSteps(threadId, runId, new ListSearchParameters()).getData();
+        for (RunStep runStep : runSteps) {
+            System.out.println(runStep.getStepDetails());
+        }
+        service.listMessages(threadId, new MessageListSearchParameters()).getData().forEach(message -> {
+            System.out.println(message.getContent());
+        });
     }
 
 

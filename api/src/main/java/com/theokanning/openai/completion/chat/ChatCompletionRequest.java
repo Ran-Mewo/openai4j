@@ -66,6 +66,13 @@ public class ChatCompletionRequest {
     Boolean stream;
 
     /**
+     * If set, partial message deltas will be sent, like in ChatGPT.
+     * Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a data: [DONE]
+     */
+    @JsonProperty("stream_options")
+    StreamOption streamOptions;
+
+    /**
      * Up to 4 sequences where the API will stop generating further tokens.
      */
     List<String> stop;
@@ -107,7 +114,9 @@ public class ChatCompletionRequest {
     String user;
 
     /**
-     * A list of the available functions.
+     * @deprecated Replaced by {@link #tools}
+     * recommend to use {@link com.theokanning.openai.function.FunctionDefinition}  or custom class
+     * @since 0.20.5 {@link com.theokanning.openai.completion.chat.ChatFunction} {@link  com.theokanning.openai.completion.chat.ChatFunctionDynamic}will be deprecated
      */
     @Deprecated
     List<?> functions;
@@ -139,8 +148,12 @@ public class ChatCompletionRequest {
     Integer topLogprobs;
 
 
+
     /**
-     * A list of tools the model may call. Currently, only functions are supported as a tool.
+     * Function definition, only used if type is "function"
+     * recommend to use {@link com.theokanning.openai.function.FunctionDefinition}  or custom class
+     *
+     * @since 0.20.5 {@link com.theokanning.openai.completion.chat.ChatFunction} {@link  com.theokanning.openai.completion.chat.ChatFunctionDynamic}will be deprecated
      */
     List<ChatTool> tools;
 

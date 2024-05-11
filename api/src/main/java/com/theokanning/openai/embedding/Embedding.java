@@ -2,11 +2,9 @@ package com.theokanning.openai.embedding;
 
 import lombok.Data;
 
-import java.util.List;
-
 /**
  * Represents an embedding returned by the embedding api
- *
+ * <p>
  * https://beta.openai.com/docs/api-reference/classifications/create
  */
 @Data
@@ -18,9 +16,9 @@ public class Embedding {
     String object;
 
     /**
-     * The embedding vector
+     * The embedding vector array or string
      */
-    List<Double> embedding;
+    Object embedding;
 
     /**
      * The position of this embedding in the list

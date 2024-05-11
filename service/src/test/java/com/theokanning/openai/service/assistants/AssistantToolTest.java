@@ -1,16 +1,16 @@
 package com.theokanning.openai.service.assistants;
 
-import com.theokanning.openai.ListSearchParameters;
 import com.theokanning.openai.OpenAiResponse;
 import com.theokanning.openai.assistants.assistant.Assistant;
 import com.theokanning.openai.assistants.assistant.AssistantRequest;
 import com.theokanning.openai.assistants.assistant.FunctionTool;
 import com.theokanning.openai.assistants.message.Message;
+import com.theokanning.openai.assistants.message.MessageListSearchParameters;
 import com.theokanning.openai.assistants.message.MessageRequest;
 import com.theokanning.openai.assistants.run.*;
 import com.theokanning.openai.assistants.thread.Thread;
 import com.theokanning.openai.assistants.thread.ThreadRequest;
-import com.theokanning.openai.service.FunctionExecutor;
+import com.theokanning.openai.function.FunctionExecutorManager;
 import com.theokanning.openai.service.OpenAiService;
 import com.theokanning.openai.service.util.ToolUtil;
 import org.junit.jupiter.api.*;
@@ -36,11 +36,11 @@ class AssistantToolTest {
 
     static String threadId;
 
-    static FunctionExecutor executor;
+    static FunctionExecutorManager executor;
 
     @BeforeAll
     static void initial() {
-        executor = new FunctionExecutor(Collections.singletonList(ToolUtil.weatherFunction()));
+        executor = new FunctionExecutorManager(Collections.singletonList(ToolUtil.weatherFunction()));
         AssistantRequest assistantRequest = AssistantRequest.builder()
                 .model("gpt-3.5-turbo").name("weather assistant")
                 .instructions("You are a weather assistant responsible for calling the weather API to return weather information based on the location entered by the user")
@@ -98,7 +98,7 @@ class AssistantToolTest {
 
         SubmitToolOutputRequestItem toolOutputRequestItem = SubmitToolOutputRequestItem.builder()
                 .toolCallId(toolCallId)
-                .output(executor.executeAndConvertToJson(function).toPrettyString())
+                .output(executor.executeAndConvertToJson(function.getName(),function.getArguments()).toPrettyString())
                 .build();
         List<SubmitToolOutputRequestItem> toolOutputRequestItems = Collections.singletonList(toolOutputRequestItem);
         SubmitToolOutputsRequest submitToolOutputsRequest = SubmitToolOutputsRequest.builder()
@@ -114,10 +114,15 @@ class AssistantToolTest {
             retrievedRun = service.retrieveRun(threadId, run.getId());
         }
         assertEquals("completed", retrievedRun.getStatus());
-        OpenAiResponse<Message> response = service.listMessages(threadId, new ListSearchParameters());
+        OpenAiResponse<Message> response = service.listMessages(threadId, MessageListSearchParameters.builder()
+                .runId(retrievedRun.getId())
+                .limit(1)
+                .build()
+        );
         List<Message> messages = response.getData();
         assertNotNull(messages);
-        assertEquals(2, messages.size());
+        //test message query parameters is correct
+        assertEquals(1, messages.size());
     }
 
 }

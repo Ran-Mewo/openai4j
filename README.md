@@ -20,22 +20,19 @@ continues development to incorporate latest API features after the original proj
 This library aims to provide Java developers with a robust tool to integrate OpenAI's powerful capabilities into their
 applications effortlessly.
 
-## v0.20.1 will be released soon
-
-- [ ]  a more user-friendly way to access and use assistant-stream
-
 # Quick Start
 
 ## Import
 ### Gradle
-`implementation 'io.github.lambdua:<api|client|service>:0.20.0'`
+
+`implementation 'io.github.lambdua:<api|client|service>:0.20.5'`
 ### Maven
 ```xml
 
 <dependency>
   <groupId>io.github.lambdua</groupId>
   <artifactId>service</artifactId>
-  <version>0.20.0</version>
+    <version>0.20.5</version>
 </dependency>
 ```
 
@@ -70,7 +67,7 @@ To utilize pojos, import the api module:
 <dependency>
   <groupId>io.github.lambdua</groupId>
   <artifactId>api</artifactId>
-  <version>0.20.0</version>
+    <version>0.20.5</version>
 </dependency>
 ```
 
@@ -114,29 +111,28 @@ OpenAiService is versatile in its setup options, as demonstrated in the `example
 //0 Using the default configuration, read the environment variables OPENAI-API_KEY, OPENAI-API_BASE-URL as the default API_KEY and BASE-URL,
 //encourage the use of environment variables to load the OpenAI API key
 OpenAiService openAiService0 = new OpenAiService();
-//1.使用默认的baseUrl,默认配置service,这里会默认先从环境变量中获取BaseURL(key:OPENAI_API_BASE_URL),如果没有则使用默认的"https://api.openai.com/v1/";
+//1.Use the default base URL and configure service by default. Here, the base URL (key: OPENAI API BASE URL) will be obtained from the environment variable by default. If not, the default URL will be used“ https://api.openai.com/v 1/";
 OpenAiService openAiService = new OpenAiService(API_KEY);
-//2. 使用自定义的baseUrl,默认配置配置service
+//2. Use custom base Url with default configuration of service
 OpenAiService openAiService1 = new OpenAiService(API_KEY, BASE_URL);
-//3.自定义过期时间
+//3.Custom expiration time
 OpenAiService openAiService2 = new OpenAiService(API_KEY, Duration.ofSeconds(10));
-//4. 更灵活的自定义
-//4.1. 自定义okHttpClient
+//4. More flexible customization
+//4.1. customize okHttpClient
 OkHttpClient client = new OkHttpClient.Builder()
-        //连接池
+        //connection pool
         .connectionPool(new ConnectionPool(Runtime.getRuntime().availableProcessors() * 2, 30, TimeUnit.SECONDS))
-        //自定义的拦截器,如重试拦截器,日志拦截器,负载均衡拦截器等
+        //Customized interceptors, such as retry interceptors, log interceptors, load balancing interceptors, etc
         // .addInterceptor(new RetryInterceptor())
         // .addInterceptor(new LogInterceptor())
         // .addInterceptor(new LoadBalanceInterceptor())
-        //添加代理
         // .proxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("proxyHost", 8080)))
         .connectTimeout(2, TimeUnit.SECONDS)
         .writeTimeout(3, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .protocols(Arrays.asList(Protocol.HTTP_2, Protocol.HTTP_1_1))
         .build();
-//4.2 自定义Retorfit配置
+//4.2 Customizing Retorfit Configuration
 Retrofit retrofit = OpenAiService.defaultRetrofit(client, OpenAiService.defaultObjectMapper(), BASE_URL);
 OpenAiApi openAiApi = retrofit.create(OpenAiApi.class);
 OpenAiService openAiService3 = new OpenAiService(openAiApi);
@@ -169,7 +165,10 @@ OpenAiService openAiService3 = new OpenAiService(openAiApi);
 <details>
 <summary>Tools</summary>
 This library supports both the outdated method of function calls and the current tool-based approach.
-Firstly, we define the function parameters:
+
+First, we define a function object. The definition of a function object is flexible; you can use POJO to define it (
+automatically serialized by JSON schema) or use methods like `map` and `FunctionDefinition` to define it. You can refer
+to the code in the example package. Here, we define a weather query function object:
 
 ```java
 public class Weather {
@@ -196,97 +195,56 @@ Next, we declare the function and associate it with an executor, here simulating
 
 ```java
 //First, a function to fetch the weather
-ChatFunction function = ChatFunction.builder()
-        .name("get_weather")
-        .description("Get the current weather in a specified location")
-        //The executor is a lambda expression that takes a Weather object and returns a WeatherResponse
-        .executor(Weather.class, w -> new WeatherResponse(w.location, w.unit, 25, "sunny"))
-        .build();
+public static FunctionDefinition weatherFunction() {
+    return FunctionDefinition.<Weather>builder()
+            .name("get_weather")
+            .description("Get the current weather in a given location")
+            .parametersDefinitionByClass(Weather.class)
+            //The executor here is a lambda expression that accepts a Weather object and returns a Weather Response object
+            .executor(w -> new WeatherResponse(w.location, w.unit, 25, "sunny"))
+            .build();
+}
 ```
 
 Then, the service is used for a chatCompletion request, incorporating the tool:
 
 ```java
 static void toolChat() {
-  OpenAiService service = new OpenAiService(Duration.ofSeconds(30));
-  //ToolUtil is a utility class that simplifies the creation of tools
-  final ChatTool tool = new ChatTool(ToolUtil.weatherFunction());
-  final List<ChatMessage> messages = new ArrayList<>();
-  final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
-  final ChatMessage userMessage = new UserMessage("What is the weather in BeiJin?");
-  messages.add(systemMessage);
-  messages.add(userMessage);
+    OpenAiService service = new OpenAiService(Duration.ofSeconds(30));
+    final ChatTool tool = new ChatTool(ToolUtil.weatherFunction());
+    final List<ChatMessage> messages = new ArrayList<>();
+    final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
+    final ChatMessage userMessage = new UserMessage("What is the weather in BeiJin?");
+    messages.add(systemMessage);
+    messages.add(userMessage);
 
-  ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
-          .model("gpt-3.5-turbo")
-          .messages(messages)
-          //Tools is a list; multiple tools can be included
-          .tools(Collections.singletonList(tool))
-          .toolChoice(ToolChoice.AUTO)
-          .n(1)
-          .maxTokens(100)
-          .build();
-  //Request is sent
-  ChatCompletionChoice choice = service.createChatCompletion(chatCompletionRequest).getChoices().get(0);
-  AssistantMessage toolCallMsg = choice.getMessage();
-  ChatToolCall toolCall = toolCallMsg.getToolCalls().get(0);
-  System.out.println(toolCall.getFunction());
+    ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
+            .model("gpt-3.5-turbo")
+            .messages(messages)
+            //Tools is a list; multiple tools can be included
+            .tools(Collections.singletonList(tool))
+            .toolChoice(ToolChoice.AUTO)
+            .n(1)
+            .maxTokens(100)
+            .build();
+    //Request is sent
+    ChatCompletionChoice choice = service.createChatCompletion(chatCompletionRequest).getChoices().get(0);
+    AssistantMessage toolCallMsg = choice.getMessage();
+    ChatToolCall toolCall = toolCallMsg.getToolCalls().get(0);
+    System.out.println(toolCall.getFunction());
 
-  messages.add(toolCallMsg);
-  messages.add(new ToolMessage("the weather is fine today.", toolCall.getId()));
+    messages.add(toolCallMsg);
+    messages.add(new ToolMessage("the weather is fine today.", toolCall.getId()));
 
-  //submit tool call
-  ChatCompletionRequest toolCallRequest = ChatCompletionRequest.builder()
-          .model("gpt-3.5-turbo")
-          .messages(messages)
-          .n(1)
-          .maxTokens(100)
-          .build();
-  ChatCompletionChoice toolCallChoice = service.createChatCompletion(toolCallRequest).getChoices().get(0);
-  System.out.println(toolCallChoice.getMessage().getContent());
-}
-```
-
-</details>
-
-<details>
-<summary>function(deprecated)</summary>
-
-```java
-static void functionChat() {
-  OpenAiService service = new OpenAiService(Duration.ofSeconds(30));
-  final List<ChatMessage> messages = new ArrayList<>();
-  final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
-  final ChatMessage userMessage = new UserMessage("What is the weather in BeiJin?");
-  messages.add(systemMessage);
-  messages.add(userMessage);
-
-  ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
-          .model("gpt-3.5-turbo")
-          .messages(messages)
-          .functions(Collections.singletonList(ToolUtil.weatherFunction()))
-          .functionCall("auto")
-          .n(1)
-          .maxTokens(100)
-          .build();
-  //Request is sent
-  ChatCompletionChoice choice = service.createChatCompletion(chatCompletionRequest).getChoices().get(0);
-  AssistantMessage functionCallMsg = choice.getMessage();
-  ChatFunctionCall functionCall = functionCallMsg.getFunctionCall();
-  System.out.println(functionCall);
-
-  messages.add(functionCallMsg);
-  messages.add(new FunctionMessage("the weather is fine today.", "get_weather"));
-
-  //submit tool call
-  ChatCompletionRequest toolCallRequest = ChatCompletionRequest.builder()
-          .model("gpt-3.5-turbo")
-          .messages(messages)
-          .n(1)
-          .maxTokens(100)
-          .build();
-  ChatCompletionChoice toolCallChoice = service.createChatCompletion(toolCallRequest).getChoices().get(0);
-  System.out.println(toolCallChoice.getMessage().getContent());
+    //submit tool call
+    ChatCompletionRequest toolCallRequest = ChatCompletionRequest.builder()
+            .model("gpt-3.5-turbo")
+            .messages(messages)
+            .n(1)
+            .maxTokens(100)
+            .build();
+    ChatCompletionChoice toolCallChoice = service.createChatCompletion(toolCallRequest).getChoices().get(0);
+    System.out.println(toolCallChoice.getMessage().getContent());
 }
 ```
 
@@ -297,99 +255,98 @@ static void functionChat() {
 
 ```java
 void streamChatMultipleToolCalls() {
-  final List<ChatFunction> functions = Arrays.asList(
-          //1. 天气查询
-          ChatFunction.builder()
-                  .name("get_weather")
-                  .description("Get the current weather in a given location")
-                  .executor(Weather.class, w -> {
-                    switch (w.location) {
-                      case "tokyo":
-                        return new WeatherResponse(w.location, w.unit, 10, "cloudy");
-                      case "san francisco":
-                        return new WeatherResponse(w.location, w.unit, 72, "sunny");
-                      case "paris":
-                        return new WeatherResponse(w.location, w.unit, 22, "sunny");
-                      default:
-                        return new WeatherResponse(w.location, w.unit, 0, "unknown");
-                    }
-                  }).build(),
-          //2. 城市查询
-          ChatFunction.builder().name("getCities").description("Get a list of cities by time").executor(City.class, v -> Arrays.asList("tokyo", "paris")).build()
-  );
-  final FunctionExecutor toolExecutor = new FunctionExecutor(functions);
+    final List<FunctionDefinition> functions = Arrays.asList(
+            //1. weather query
+            FunctionDefinition.<ToolUtil.Weather>builder()
+                    .name("get_weather")
+                    .description("Get the current weather in a given location")
+                    .parametersDefinitionByClass(ToolUtil.Weather.class)
+                    .executor( w -> {
+                        switch (w.location) {
+                            case "tokyo":
+                                return new ToolUtil.WeatherResponse(w.location, w.unit, 10, "cloudy");
+                            case "san francisco":
+                                return new ToolUtil.WeatherResponse(w.location, w.unit, 72, "sunny");
+                            case "paris":
+                                return new ToolUtil.WeatherResponse(w.location, w.unit, 22, "sunny");
+                            default:
+                                return new ToolUtil.WeatherResponse(w.location, w.unit, 0, "unknown");
+                        }
+                    }).build(),
+            //2. city query
+            FunctionDefinition.<ToolUtil.City>builder().name("getCities").description("Get a list of cities by time").parametersDefinitionByClass(ToolUtil.City.class).executor(v -> Arrays.asList("tokyo", "paris")).build()
+    );
+    final FunctionExecutorManager toolExecutor = new FunctionExecutorManager(functions);
 
-  List<ChatTool> tools = new ArrayList<>();
-  tools.add(new ChatTool<>(functions.get(0)));
-  tools.add(new ChatTool<>(functions.get(1)));
+    List<ChatTool> tools = new ArrayList<>();
+    tools.add(new ChatTool(functions.get(0)));
+    tools.add(new ChatTool(functions.get(1)));
 
-  final List<ChatMessage> messages = new ArrayList<>();
-  final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
-  final ChatMessage userMessage = new UserMessage("What is the weather like in cities with weather on 2022-12-01 ?");
-  messages.add(systemMessage);
-  messages.add(userMessage);
+    final List<ChatMessage> messages = new ArrayList<>();
+    final ChatMessage systemMessage = new SystemMessage("You are a helpful assistant.");
+    final ChatMessage userMessage = new UserMessage("What is the weather like in cities with weather on 2022-12-01 ?");
+    messages.add(systemMessage);
+    messages.add(userMessage);
 
-  ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
-          .builder()
-          .model("gpt-3.5-turbo-0613")
-          .messages(messages)
-          .tools(tools)
-          .toolChoice("auto")
-          .n(1)
-          .maxTokens(200)
-          .build();
+    ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
+            .builder()
+            .model("gpt-3.5-turbo")
+            .messages(messages)
+            .tools(tools)
+            .toolChoice(ToolChoice.AUTO)
+            .n(1)
+            .maxTokens(200)
+            .build();
 
-  AssistantMessage accumulatedMessage = service.mapStreamToAccumulator(service.streamChatCompletion(chatCompletionRequest))
-          .blockingLast()
-          .getAccumulatedMessage();
+    AssistantMessage accumulatedMessage = service.mapStreamToAccumulator(service.streamChatCompletion(chatCompletionRequest))
+            .blockingLast()
+            .getAccumulatedMessage();
 
-  List<ChatToolCall> toolCalls = accumulatedMessage.getToolCalls();
-  ChatToolCall toolCall = toolCalls.get(0);
-  Object execute = toolExecutor.execute(toolCall.getFunction());
-  JsonNode jsonNode = toolExecutor.executeAndConvertToJson(toolCall.getFunction());
-  ToolMessage toolMessage = toolExecutor.executeAndConvertToMessageHandlingExceptions(toolCall.getFunction(), toolCall.getId());
-  messages.add(accumulatedMessage);
-  messages.add(toolMessage);
+    List<ChatToolCall> toolCalls = accumulatedMessage.getToolCalls();
 
-  ChatCompletionRequest chatCompletionRequest2 = ChatCompletionRequest
-          .builder()
-          //3.5 there may be logical issues
-          .model("gpt-3.5-turbo-0125")
-          .messages(messages)
-          .tools(tools)
-          .toolChoice("auto")
-          .n(1)
-          .maxTokens(100)
-          .logitBias(new HashMap<>())
-          .build();
+    ChatToolCall toolCall = toolCalls.get(0);
+    ChatFunctionCall function = toolCall.getFunction();
+    JsonNode jsonNode = toolExecutor.executeAndConvertToJson(function.getName(), function.getArguments());
+    ToolMessage toolMessage = toolExecutor.executeAndConvertToChatMessage(function.getName(),function.getArguments(), toolCall.getId());
+    messages.add(accumulatedMessage);
+    messages.add(toolMessage);
+    ChatCompletionRequest chatCompletionRequest2 = ChatCompletionRequest
+            .builder()
+            //3.5 there may be logical issues
+            .model("gpt-3.5-turbo-0125")
+            .messages(messages)
+            .tools(tools)
+            .toolChoice(ToolChoice.AUTO)
+            .n(1)
+            .maxTokens(100)
+            .logitBias(new HashMap<>())
+            .build();
 
-  // ChatCompletionChoice choice2 = service.createChatCompletion(chatCompletionRequest2).getChoices().get(0);
-  AssistantMessage accumulatedMessage2 = service.mapStreamToAccumulator(service.streamChatCompletion(chatCompletionRequest2))
-          .blockingLast()
-          .getAccumulatedMessage();
-  //这里应该有两个工具调用
-  messages.add(accumulatedMessage2);
+    // ChatCompletionChoice choice2 = service.createChatCompletion(chatCompletionRequest2).getChoices().get(0);
+    AssistantMessage accumulatedMessage2 = service.mapStreamToAccumulator(service.streamChatCompletion(chatCompletionRequest2))
+            .blockingLast()
+            .getAccumulatedMessage();
+    messages.add(accumulatedMessage2);
+    for (ChatToolCall weatherToolCall : accumulatedMessage2.getToolCalls()) {
+        ChatFunctionCall call2 = weatherToolCall.getFunction();
+        Object itemResult = toolExecutor.execute(call2.getName(), call2.getArguments());
+        messages.add(toolExecutor.executeAndConvertToChatMessage(call2.getName(),call2.getArguments(), weatherToolCall.getId()));
+    }
 
-  for (ChatToolCall weatherToolCall : accumulatedMessage2.getToolCalls()) {
-    Object itemResult = toolExecutor.execute(weatherToolCall.getFunction());
-    assertInstanceOf(WeatherResponse.class, itemResult);
-    messages.add(toolExecutor.executeAndConvertToMessage(weatherToolCall.getFunction(), weatherToolCall.getId()));
-  }
+    ChatCompletionRequest chatCompletionRequest3 = ChatCompletionRequest
+            .builder()
+            .model("gpt-3.5-turbo")
+            .messages(messages)
+            .tools(tools)
+            .toolChoice(ToolChoice.AUTO)
+            .n(1)
+            .maxTokens(100)
+            .logitBias(new HashMap<>())
+            .build();
 
-  ChatCompletionRequest chatCompletionRequest3 = ChatCompletionRequest
-          .builder()
-          .model("gpt-3.5-turbo-0613")
-          .messages(messages)
-          .tools(tools)
-          .toolChoice("auto")
-          .n(1)
-          .maxTokens(100)
-          .logitBias(new HashMap<>())
-          .build();
-
-  AssistantMessage accumulatedMessage3 = service.mapStreamToAccumulator(service.streamChatCompletion(chatCompletionRequest3))
-          .blockingLast()
-          .getAccumulatedMessage();
+    AssistantMessage accumulatedMessage3 = service.mapStreamToAccumulator(service.streamChatCompletion(chatCompletionRequest3))
+            .blockingLast()
+            .getAccumulatedMessage();
 }
 
 ```
@@ -417,71 +374,65 @@ public static void main(String... args) {
 
 ```java
 static void assistantToolCall() {
-  OpenAiService service = new OpenAiService();
-  FunctionExecutor executor = new FunctionExecutor(Collections.singletonList(ToolUtil.weatherFunction()));
-  //create assistant
-  AssistantRequest assistantRequest = AssistantRequest.builder()
-          .model("gpt-3.5-turbo").name("weather assistant")
-          .instructions("You are a weather assistant responsible for calling the weather API to return weather information based on the location entered by the user")
-          .tools(Collections.singletonList(new FunctionTool(ToolUtil.weatherFunction())))
-          .temperature(0D)
-          .build();
-  Assistant assistant = service.createAssistant(assistantRequest);
-  String assistantId = assistant.getId();
+    OpenAiService service = new OpenAiService();
+    FunctionExecutorManager executor = new FunctionExecutorManager(Collections.singletonList(ToolUtil.weatherFunction()));
+    AssistantRequest assistantRequest = AssistantRequest.builder()
+            .model("gpt-3.5-turbo").name("weather assistant")
+            .instructions("You are a weather assistant responsible for calling the weather API to return weather information based on the location entered by the user")
+            .tools(Collections.singletonList(new FunctionTool(ToolUtil.weatherFunction())))
+            .temperature(0D)
+            .build();
+    Assistant assistant = service.createAssistant(assistantRequest);
+    String assistantId = assistant.getId();
+    ThreadRequest threadRequest = ThreadRequest.builder().build();
+    Thread thread = service.createThread(threadRequest);
+    String threadId = thread.getId();
 
-  //create thread
-  ThreadRequest threadRequest = ThreadRequest.builder().build();
-  Thread thread = service.createThread(threadRequest);
-  String threadId = thread.getId();
+    MessageRequest messageRequest = MessageRequest.builder()
+            .content("What's the weather of Xiamen?")
+            .build();
+    //add message to thread
+    service.createMessage(threadId, messageRequest);
+    RunCreateRequest runCreateRequest = RunCreateRequest.builder().assistantId(assistantId).build();
 
-  MessageRequest messageRequest = MessageRequest.builder()
-          .content("What's the weather of Xiamen?")
-          .build();
-  //add message to thread
-  service.createMessage(threadId, messageRequest);
-  RunCreateRequest runCreateRequest = RunCreateRequest.builder().assistantId(assistantId).build();
+    Run run = service.createRun(threadId, runCreateRequest);
 
-  Run run = service.createRun(threadId, runCreateRequest);
+    Run retrievedRun = service.retrieveRun(threadId, run.getId());
+    while (!(retrievedRun.getStatus().equals("completed"))
+            && !(retrievedRun.getStatus().equals("failed"))
+            && !(retrievedRun.getStatus().equals("expired"))
+            && !(retrievedRun.getStatus().equals("incomplete"))
+            && !(retrievedRun.getStatus().equals("requires_action"))) {
+        retrievedRun = service.retrieveRun(threadId, run.getId());
+    }
+    System.out.println(retrievedRun);
 
-  //wait for the run to complete
-  Run retrievedRun = service.retrieveRun(threadId, run.getId());
-  while (!(retrievedRun.getStatus().equals("completed"))
-          && !(retrievedRun.getStatus().equals("failed"))
-          && !(retrievedRun.getStatus().equals("expired"))
-          && !(retrievedRun.getStatus().equals("incomplete"))
-          && !(retrievedRun.getStatus().equals("requires_action"))) {
-    retrievedRun = service.retrieveRun(threadId, run.getId());
-  }
-  //print the result
-  System.out.println(retrievedRun);
+    RequiredAction requiredAction = retrievedRun.getRequiredAction();
+    List<ToolCall> toolCalls = requiredAction.getSubmitToolOutputs().getToolCalls();
+    ToolCall toolCall = toolCalls.get(0);
+    ToolCallFunction function = toolCall.getFunction();
+    String toolCallId = toolCall.getId();
 
-  RequiredAction requiredAction = retrievedRun.getRequiredAction();
-  List<ToolCall> toolCalls = requiredAction.getSubmitToolOutputs().getToolCalls();
-  ToolCall toolCall = toolCalls.get(0);
-  ToolCallFunction function = toolCall.getFunction();
-  String toolCallId = toolCall.getId();
+    SubmitToolOutputsRequest submitToolOutputsRequest = SubmitToolOutputsRequest.ofSingletonToolOutput(toolCallId, executor.executeAndConvertToJson(function.getName(),function.getArguments()).toPrettyString());
+    retrievedRun = service.submitToolOutputs(threadId, retrievedRun.getId(), submitToolOutputsRequest);
 
-  //submit tool output with get_weather function
-  SubmitToolOutputsRequest submitToolOutputsRequest = SubmitToolOutputsRequest.ofSingletonToolOutput(toolCallId, executor.executeAndConvertToJson(function).toPrettyString());
-  retrievedRun = service.submitToolOutputs(threadId, retrievedRun.getId(), submitToolOutputsRequest);
+    while (!(retrievedRun.getStatus().equals("completed"))
+            && !(retrievedRun.getStatus().equals("failed"))
+            && !(retrievedRun.getStatus().equals("expired"))
+            && !(retrievedRun.getStatus().equals("incomplete"))
+            && !(retrievedRun.getStatus().equals("requires_action"))) {
+        retrievedRun = service.retrieveRun(threadId, run.getId());
+    }
 
-  while (!(retrievedRun.getStatus().equals("completed"))
-          && !(retrievedRun.getStatus().equals("failed"))
-          && !(retrievedRun.getStatus().equals("expired"))
-          && !(retrievedRun.getStatus().equals("incomplete"))
-          && !(retrievedRun.getStatus().equals("requires_action"))) {
-    retrievedRun = service.retrieveRun(threadId, run.getId());
-  }
+    System.out.println(retrievedRun);
 
-  //print the result with tool call
-  System.out.println(retrievedRun);
+    OpenAiResponse<Message> response = service.listMessages(threadId, MessageListSearchParameters.builder()
+            .runId(retrievedRun.getId()).build());
+    List<Message> messages = response.getData();
+    messages.forEach(message -> {
+        System.out.println(message.getContent());
+    });
 
-  //get result message list
-  OpenAiResponse<Message> response = service.listMessages(threadId, new ListSearchParameters());
-  List<Message> messages = response.getData();
-  messages.forEach(message -> {
-    System.out.println(message.getContent());
-  });
 }
 ```
 
@@ -505,16 +456,16 @@ static void assistantStream() throws JsonProcessingException {
   Assistant assistant = service.createAssistant(assistantRequest);
   assistantId = assistant.getId();
 
-  //一般响应
+    //general response
   Flowable<AssistantSSE> threadAndRunStream = service.createThreadAndRunStream(
           CreateThreadAndRunRequest.builder()
                   .assistantId(assistantId)
-                  //这里不使用任何工具
+                  //no tools are used here
                   .toolChoice(ToolChoice.NONE)
                   .thread(ThreadRequest.builder()
                           .messages(Collections.singletonList(
                                   MessageRequest.builder()
-                                          .content("你好,你可以帮助我做什么?")
+                                          .content("hello what can you help me with?")
                                           .build()
                           ))
                           .build())
@@ -531,11 +482,11 @@ static void assistantStream() throws JsonProcessingException {
   RunStep runStep = objectMapper.readValue(runStepCompletion.get().getData(), RunStep.class);
   System.out.println(runStep.getStepDetails());
 
-  // 函数调用 stream
+    // Function call stream
   threadId = runStep.getThreadId();
-  service.createMessage(threadId, MessageRequest.builder().content("请帮我查询北京天气").build());
+  service.createMessage(threadId, MessageRequest.builder().content("Please help me check the weather in Beijing").build());
   Flowable<AssistantSSE> getWeatherFlowable = service.createRunStream(threadId, RunCreateRequest.builder()
-          //这里强制使用get_weather函数
+          //Force the use of the get weather function here
           .assistantId(assistantId)
           .toolChoice(new ToolChoice(new Function("get_weather")))
           .build()
@@ -554,8 +505,8 @@ static void assistantStream() throws JsonProcessingException {
   String callId = toolCall.getId();
 
   System.out.println(toolCall.getFunction());
-  // 提交函数调用结果
-  Flowable<AssistantSSE> toolCallResponseFlowable = service.submitToolOutputsStream(threadId, requireActionRun.getId(), SubmitToolOutputsRequest.ofSingletonToolOutput(callId, "北京的天气是晴天"));
+    // Submit function call results
+    Flowable<AssistantSSE> toolCallResponseFlowable = service.submitToolOutputsStream(threadId, requireActionRun.getId(), SubmitToolOutputsRequest.ofSingletonToolOutput(callId, "The weather in Beijing is sunny"));
   TestSubscriber<AssistantSSE> subscriber3 = new TestSubscriber<>();
   toolCallResponseFlowable
           .doOnNext(System.out::println)
@@ -569,6 +520,121 @@ static void assistantStream() throws JsonProcessingException {
 ```
 
 </details>
+
+
+<details>
+<summary>Assistant Stream Manager</summary>
+
+By using the `AssistantEventHandler` class and the `AssistantStreamManager` class, it is easier to manage the streaming
+calls of Assistant `AssistantEventHandler` contains all Assistant stream event callback hooks, and you can implement
+different events as needed:
+
+```java
+    /**
+     * You can implement various event callbacks for Assistant Event Handlers according to your own needs, making it convenient for you to handle various events related to Assistant
+     */
+    private static class LogHandler implements AssistantEventHandler {
+        @Override
+        public void onEvent(AssistantSSE sse) {
+            //every event will call this method
+        }
+
+        @Override
+        public void onRunCreated(Run run) {
+            System.out.println("start run: " + run.getId());
+        }
+
+        @Override
+        public void onEnd() {
+            System.out.println("stream end");
+        }
+
+        @Override
+        public void onMessageDelta(MessageDelta messageDelta) {
+            System.out.println(messageDelta.getDelta().getContent().get(0).getText());
+        }
+
+        @Override
+        public void onMessageCompleted(Message message) {
+            System.out.println("message completed");
+        }
+
+        @Override
+        public void onMessageInComplete(Message message) {
+            System.out.println("message in complete");
+        }
+
+        @Override
+        public void onError(Throwable error) {
+            System.out.println("error:" + error.getMessage());
+        }
+    }
+```
+
+`AssistantStreamManager` arranges and manages various events in the stream, supporting synchronous/asynchronous
+retrieval of content from the stream,
+which can be obtained through the manager. Below is a usage example, for more examples, please refer
+to `AssistantStreamManagerTest.java`.
+
+```java
+    static void streamTest() {
+    OpenAiService service = new OpenAiService();
+    //1. create assistant
+    AssistantRequest assistantRequest = AssistantRequest.builder()
+            .model("gpt-3.5-turbo").name("weather assistant")
+            .instructions("You are a weather assistant responsible for calling the weather API to return weather information based on the location entered by the user")
+            .tools(Collections.singletonList(new FunctionTool(ToolUtil.weatherFunction())))
+            .temperature(0D)
+            .build();
+    Assistant assistant = service.createAssistant(assistantRequest);
+    String assistantId = assistant.getId();
+
+    System.out.println("assistantId:" + assistantId);
+    ThreadRequest threadRequest = ThreadRequest.builder()
+            .build();
+    Thread thread = service.createThread(threadRequest);
+    String threadId = thread.getId();
+    System.out.println("threadId:" + threadId);
+    MessageRequest messageRequest = MessageRequest.builder()
+            .content("What can you help me with?")
+            .build();
+    service.createMessage(threadId, messageRequest);
+    RunCreateRequest runCreateRequest = RunCreateRequest.builder()
+            .assistantId(assistantId)
+            .toolChoice(ToolChoice.AUTO)
+            .build();
+
+    //blocking
+    // AssistantStreamManager blockedManagere = AssistantStreamManager.syncStart(service.createRunStream(threadId, runCreateRequest), new LogHandler());
+    //async
+    AssistantStreamManager streamManager = AssistantStreamManager.start(service.createRunStream(threadId, runCreateRequest), new LogHandler());
+
+
+    //Other operations can be performed here...
+    boolean completed = streamManager.isCompleted();
+
+
+    // you can shut down the streamManager if you want to stop the stream
+    streamManager.shutDown();
+
+    //waiting for completion
+    streamManager.waitForCompletion();
+    // all of flowable events
+    List<AssistantSSE> eventMsgsHolder = streamManager.getEventMsgsHolder();
+
+    Optional<Run> currentRun = streamManager.getCurrentRun();
+    // get the accumulated message
+    streamManager.getAccumulatedMsg().ifPresent(msg -> {
+        System.out.println("accumulatedMsg:" + msg);
+    });
+    service.deleteAssistant(assistantId);
+    service.deleteThread(threadId);
+}
+```
+
+</details>
+
+- [Assistant iamge chat](./service/src/test/java/com/theokanning/openai/service/assistants/AssistantImageTest.java#L65-L90)
 
 # FAQs
 
@@ -608,6 +674,21 @@ We hope you find this library useful! If you do, consider giving it a star on li
 the project alive and continuously improve it. Stay tuned for updates and feel free to contribute to the project or
 suggest new features.
 Thank you for supporting OpenAi4J!
+
+# Contributors
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+<a href="https://github.com/Lambdua/openai4j/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Lambdua/openai4j" />
+</a>
 
 # License
 Released under the MIT License

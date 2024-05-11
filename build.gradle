@@ -37,6 +37,14 @@ allprojects {
     compileJava.options.encoding = 'UTF-8'
 }
 
+configurations.configureEach {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'com.fasterxml.jackson.core') {
+            details.useVersion libs.getVersions().jackson as String
+        }
+    }
+}
+
 shadowJar {
     configurations = [project.configurations.runtimeClasspath]
     from subprojects.collect { it.shadowJar.outputs.files }
