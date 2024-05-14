@@ -3,6 +3,7 @@ package com.theokanning.openai.function;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.theokanning.openai.assistants.run.SubmitToolOutputRequestItem;
+import com.theokanning.openai.completion.chat.ChatTool;
 import com.theokanning.openai.completion.chat.FunctionMessage;
 import com.theokanning.openai.completion.chat.ToolMessage;
 import lombok.Getter;
@@ -90,6 +91,15 @@ public class FunctionExecutorManager {
 
     public JsonNode executeAndConvertToJson(String funName, JsonNode arguments) {
         return mapper.convertValue(execute(funName, arguments), JsonNode.class);
+    }
+
+    public List<ChatTool> getFunctionsAsTools() {
+        // TODO: Test if stream().map is faster (it's very likely not)
+        List<ChatTool> chatTools = new ArrayList<>();
+        for (FunctionDefinition functionDefinition : functionHolderMap.values()) {
+            chatTools.add(new ChatTool(functionDefinition));
+        }
+        return chatTools;
     }
 
     /**
