@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 
@@ -22,7 +23,11 @@ public class FunctionParametersSerializer extends JsonSerializer<FunctionDefinit
         gen.writeStringField("description", value.getDescription());
         if (value.getParametersDefinitionClass() != null) {
             gen.writeFieldName("parameters");
-            gen.writeRawValue(mapper.writeValueAsString(jsonSchemaGenerator.generateJsonSchema(value.getParametersDefinitionClass())));
+            ObjectNode parameterSchema = (ObjectNode) jsonSchemaGenerator.generateJsonSchema(value.getParametersDefinitionClass());
+            parameterSchema.remove("$schema");
+            parameterSchema.remove("title");
+            parameterSchema.remove("additionalProperties");
+            gen.writeRawValue(mapper.writeValueAsString(parameterSchema));
         } else {
             gen.writeFieldName("parameters");
             gen.writeRawValue(mapper.writeValueAsString(value.getParametersDefinition()));

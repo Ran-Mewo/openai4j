@@ -42,6 +42,7 @@ import com.theokanning.openai.embedding.EmbeddingResult;
 import com.theokanning.openai.file.File;
 import com.theokanning.openai.fine_tuning.FineTuningEvent;
 import com.theokanning.openai.fine_tuning.FineTuningJob;
+import com.theokanning.openai.fine_tuning.FineTuningJobCheckpoint;
 import com.theokanning.openai.fine_tuning.FineTuningJobRequest;
 import com.theokanning.openai.image.CreateImageEditRequest;
 import com.theokanning.openai.image.CreateImageRequest;
@@ -242,6 +243,10 @@ public class OpenAiService {
         return execute(api.listFineTuningJobEvents(fineTuningJobId)).data;
     }
 
+    public List<FineTuningJobCheckpoint> listFineTuningCheckpoints(String fineTuningJobId) {
+        return execute(api.listFineTuningCheckpoints(fineTuningJobId)).data;
+    }
+
     @Deprecated
     public Flowable<CompletionChunk> streamCompletion(CompletionRequest request) {
         request.setStream(true);
@@ -378,7 +383,11 @@ public class OpenAiService {
         if (request.getLanguage() != null) {
             builder.addFormDataPart("language", request.getLanguage());
         }
-
+        if (request.getTimestampGranularities() != null && !request.getTimestampGranularities().isEmpty()) {
+            for (String granularity : request.getTimestampGranularities()) {
+                builder.addFormDataPart("timestamp_granularities[]", granularity);
+            }
+        }
         return execute(api.createTranscription(builder.build()));
     }
 
@@ -470,6 +479,10 @@ public class OpenAiService {
         Map<String, Object> queryParameters = mapper.convertValue(params, new TypeReference<Map<String, Object>>() {
         });
         return execute(api.listMessages(threadId, queryParameters));
+    }
+
+    public DeleteResult deleteMessage(String threadId, String messageId) {
+        return execute(api.deleteMessage(threadId, messageId));
     }
 
 
