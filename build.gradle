@@ -34,6 +34,11 @@ allprojects {
         }
     }
 
+    tasks.named('jar') {
+        enabled = false
+    }
+    jar.finalizedBy(shadowJar)
+
     compileJava.options.encoding = 'UTF-8'
 }
 
